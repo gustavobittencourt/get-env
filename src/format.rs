@@ -28,10 +28,6 @@ pub fn masked_line(name: &str, value: &str) -> String {
 
 /// `NOME=valor` para o clipboard: valor real, com aspas simples só quando
 /// o shell precisaria delas.
-#[cfg_attr(
-    not(test),
-    expect(dead_code, reason = "a tabela da Task 5 passa a usar")
-)]
 pub fn shell_line(name: &str, value: &str) -> String {
     let safe = !value.is_empty()
         && value
