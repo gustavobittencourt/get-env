@@ -1,0 +1,10 @@
+
+[package]
+name = "get-env"
+version = "0.1.0"
+edition = "2024"
+description = "Acha variáveis de ambiente por nome aproximado, copia para o clipboard e mostra uma tabela interativa"
+
+[dependencies]
+ratatui = "0.30.2"
+
