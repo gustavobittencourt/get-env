@@ -136,3 +136,24 @@ fn bad_args_rc2() {
     assert_eq!(rc, 2);
     assert!(err.starts_with("uso: get-env"), "{err:?}");
 }
+
+#[test]
+fn closed_pipe_exits_cleanly() {
+    let vars: Vec<(String, String)> = (0..3000)
+        .map(|i| (format!("VAR_{i:05}"), "x".repeat(40)))
+        .collect();
+    let mut child = Command::new(BIN)
+        .env_clear()
+        .env("PATH", "/usr/bin:/bin")
+        .envs(vars)
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    drop(child.stdout.take());
+    let out = child.wait_with_output().unwrap();
+    let err = String::from_utf8(out.stderr).unwrap();
+    assert!(!err.contains("panicked"), "{err}");
+    assert_eq!(out.status.code(), Some(0));
+}

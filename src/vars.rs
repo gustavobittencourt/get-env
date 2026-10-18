@@ -10,7 +10,7 @@ pub struct Var {
 }
 
 /// Faz `source` do arquivo e imprime `nome\0valor\0` de cada nome pedido.
-const SOURCE_SCRIPT: &str = r#"set -a; source "$1"; set +a; shift; for n in "$@"; do printf "%s\0%s\0" "$n" "${(P)n}"; done"#;
+const SOURCE_SCRIPT: &str = r#"set -a; source "$1" >/dev/null; set +a; shift; for n in "$@"; do printf "%s\0%s\0" "$n" "${(P)n}"; done"#;
 
 /// Converte pares do ambiente (não UTF-8 vira U+FFFD) e ordena por nome.
 pub fn from_pairs(pairs: impl IntoIterator<Item = (OsString, OsString)>) -> Vec<Var> {
@@ -48,11 +48,16 @@ pub fn from_file(path: &Path) -> Result<Vec<Var>, String> {
         .args(&names)
         .output()
         .map_err(|e| format!("erro ao rodar o zsh: {e}"))?;
+    // O stderr do zsh não aparece: ele pode citar trechos do arquivo, e
+    // portanto valores sem máscara.
     if !output.status.success() {
+        let code = output
+            .status
+            .code()
+            .map_or("sinal".to_string(), |c| c.to_string());
         return Err(format!(
-            "erro ao ler {}: {}",
-            path.display(),
-            String::from_utf8_lossy(&output.stderr).trim()
+            "erro ao ler {}: o zsh saiu com {code}",
+            path.display()
         ));
     }
 
@@ -140,6 +145,30 @@ mod tests {
                 var("D", "2"),
             ])
         );
+    }
+
+    #[test]
+    fn from_file_error_hides_zsh_output() {
+        let path = temp_file(
+            "zsh-error",
+            "FAKE_TOKEN= sk-fakesecret123\nA=${x:?faltou}\n",
+        );
+        let result = from_file(&path);
+        std::fs::remove_file(&path).unwrap();
+        let err = result.unwrap_err();
+        assert!(!err.contains("sk-fakesecret123"), "{err}");
+        assert!(
+            err.starts_with(&format!("erro ao ler {}", path.display())),
+            "{err}"
+        );
+    }
+
+    #[test]
+    fn from_file_ignores_source_stdout() {
+        let path = temp_file("zsh-echo", "echo carregando\nFAKE_TOKEN=abc\n");
+        let result = from_file(&path);
+        std::fs::remove_file(&path).unwrap();
+        assert_eq!(result, Ok(vec![var("FAKE_TOKEN", "abc")]));
     }
 
     #[test]

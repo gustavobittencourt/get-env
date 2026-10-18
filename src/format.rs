@@ -32,7 +32,7 @@ pub fn shell_line(name: &str, value: &str) -> String {
     let safe = !value.is_empty()
         && value
             .chars()
-            .all(|c| c.is_ascii_alphanumeric() || "_@%+=:,./-".contains(c));
+            .all(|c| c.is_ascii_alphanumeric() || "_@%+:,./-".contains(c));
     if safe {
         format!("{name}={value}")
     } else {
@@ -97,6 +97,12 @@ mod tests {
         assert_eq!(shell_line("A", "it's"), "A='it'\\''s'");
         assert_eq!(shell_line("A", "l1\nl2"), "A='l1\nl2'");
         assert_eq!(shell_line("A", ""), "A=''");
+    }
+
+    #[test]
+    fn shell_line_quotes_zsh_equals_expansion() {
+        assert_eq!(shell_line("A", "=ls"), "A='=ls'");
+        assert_eq!(shell_line("A", "x:=ls"), "A='x:=ls'");
     }
 
     #[test]

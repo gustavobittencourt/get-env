@@ -5,7 +5,7 @@ mod matching;
 mod tui;
 mod vars;
 
-use std::io::IsTerminal;
+use std::io::{IsTerminal, Write};
 use std::process::ExitCode;
 
 use format::masked_line;
@@ -46,7 +46,9 @@ fn main() -> ExitCode {
     let tty = std::io::stdout().is_terminal();
     if args.query.is_some() && found.len() == 1 {
         let var = &found[0];
-        println!("{}", masked_line(&var.name, &var.value));
+        if let Some(code) = print_masked(&found) {
+            return code;
+        }
         if tty {
             if let Err(e) = clipboard::copy(&var.value) {
                 eprintln!("erro ao copiar: {e}");
@@ -62,12 +64,29 @@ fn main() -> ExitCode {
             eprintln!("erro na tabela: {e}");
             return ExitCode::from(1);
         }
-    } else {
-        for var in &found {
-            println!("{}", masked_line(&var.name, &var.value));
-        }
+    } else if let Some(code) = print_masked(&found) {
+        return code;
     }
     ExitCode::SUCCESS
+}
+
+/// Imprime as linhas mascaradas. Pipe fechado (`get-env | head`) encerra
+/// em silêncio com rc 0; outro erro de escrita devolve rc 1.
+fn print_masked(vars: &[Var]) -> Option<ExitCode> {
+    let mut out = std::io::stdout().lock();
+    for var in vars {
+        match writeln!(out, "{}", masked_line(&var.name, &var.value)) {
+            Ok(()) => {}
+            Err(e) if e.kind() == std::io::ErrorKind::BrokenPipe => {
+                return Some(ExitCode::SUCCESS);
+            }
+            Err(e) => {
+                eprintln!("erro ao escrever: {e}");
+                return Some(ExitCode::from(1));
+            }
+        }
+    }
+    None
 }
 
 /// Variáveis cujo nome casa com `query`, na ordem do `matching::find`.
