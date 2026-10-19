@@ -3,6 +3,8 @@
 use std::io::Write;
 use std::process::{Command, Stdio};
 
+use crate::i18n::lang;
+
 /// Roda `cmd` com `sh -c` e entrega `text` no stdin, sem `\n` final.
 pub fn copy_with(cmd: &str, text: &str) -> Result<(), String> {
     let mut child = Command::new("sh")
@@ -10,18 +12,16 @@ pub fn copy_with(cmd: &str, text: &str) -> Result<(), String> {
         .stdin(Stdio::piped())
         .stdout(Stdio::null())
         .spawn()
-        .map_err(|e| format!("comando de clipboard falhou: {e}"))?;
+        .map_err(|e| lang().clip_failed(&e))?;
     if let Some(mut stdin) = child.stdin.take() {
         // Comando que não lê o stdin fecha o pipe; o status abaixo decide.
         let _ = stdin.write_all(text.as_bytes());
     }
-    let status = child
-        .wait()
-        .map_err(|e| format!("comando de clipboard falhou: {e}"))?;
+    let status = child.wait().map_err(|e| lang().clip_failed(&e))?;
     match status.code() {
         Some(0) => Ok(()),
-        Some(code) => Err(format!("comando de clipboard saiu com {code}")),
-        None => Err("comando de clipboard terminou por sinal".to_string()),
+        Some(code) => Err(lang().clip_exit(code)),
+        None => Err(lang().clip_signal().to_string()),
     }
 }
 

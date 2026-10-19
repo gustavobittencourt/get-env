@@ -4,6 +4,7 @@
 use ratatui::style::{Modifier, Style};
 
 use crate::format::{display_value, fit, is_sensitive, width, wrap};
+use crate::i18n::lang;
 use crate::theme::{Palette, paint};
 
 /// Rodapé do cartão: o resultado da cópia.
@@ -12,7 +13,6 @@ pub enum Footer {
     Failed(String),
 }
 
-const MASKED_NOTE: &str = "  🔒 mascarado";
 const MIN_INNER: usize = 28;
 
 /// Cartão de borda arredondada com o nome no título, o valor (mascarado
@@ -26,11 +26,12 @@ pub fn card(
     max_width: usize,
 ) -> String {
     let shown = display_value(name, value);
+    let masked_note = format!("  {}", lang().masked());
     let sensitive = is_sensitive(name);
-    let body_width = width(&shown) + if sensitive { width(MASKED_NOTE) } else { 0 };
+    let body_width = width(&shown) + if sensitive { width(&masked_note) } else { 0 };
     let (foot, foot_style) = match footer {
-        Footer::Copied => ("✅ valor copiado".to_string(), palette.ok),
-        Footer::Failed(e) => (format!("❌ erro ao copiar: {e}"), palette.err),
+        Footer::Copied => (lang().value_copied().to_string(), palette.ok),
+        Footer::Failed(e) => (format!("❌ {}", lang().copy_failed(e)), palette.err),
     };
     let inner = (body_width + 2)
         .max(width(name) + 3)
@@ -66,12 +67,12 @@ pub fn card(
     if body_width <= inner - 2 {
         let mut painted = paint(&shown, value_style);
         if sensitive {
-            painted += &paint(MASKED_NOTE, palette.secondary);
+            painted += &paint(&masked_note, palette.secondary);
         }
         out += &body_line(painted, body_width);
     } else {
         let body = if sensitive {
-            format!("{shown}{MASKED_NOTE}")
+            format!("{shown}{masked_note}")
         } else {
             shown
         };

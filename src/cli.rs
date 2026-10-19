@@ -2,7 +2,7 @@
 
 use std::path::PathBuf;
 
-pub const USAGE: &str = "uso: get-env [nome] [--file|-f <arquivo.env>]";
+use crate::i18n::lang;
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct Args {
@@ -17,9 +17,9 @@ pub fn parse(args: impl IntoIterator<Item = String>) -> Result<Args, String> {
     let mut args = args.into_iter();
     while let Some(arg) = args.next() {
         match arg.as_str() {
-            "-f" | "--file" => file = Some(args.next().ok_or(USAGE)?.into()),
-            flag if flag.starts_with('-') => return Err(USAGE.to_string()),
-            _ if query.is_some() => return Err(USAGE.to_string()),
+            "-f" | "--file" => file = Some(args.next().ok_or_else(usage)?.into()),
+            flag if flag.starts_with('-') => return Err(usage()),
+            _ if query.is_some() => return Err(usage()),
             _ => query = Some(arg),
         }
     }
@@ -27,6 +27,10 @@ pub fn parse(args: impl IntoIterator<Item = String>) -> Result<Args, String> {
         query: query.filter(|q| !q.is_empty()),
         file,
     })
+}
+
+fn usage() -> String {
+    lang().usage().to_string()
 }
 
 #[cfg(test)]

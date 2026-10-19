@@ -4,6 +4,7 @@ use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 use super::geometry::Cell;
 use crate::format::shell_line;
+use crate::i18n::lang;
 use crate::matching;
 use crate::vars::Var;
 
@@ -153,11 +154,11 @@ impl App {
 
     pub fn copied_status(&self, kind: CopyKind) -> String {
         let what = match kind {
-            CopyKind::Name => "nome",
-            CopyKind::Value => "valor",
-            CopyKind::Line => "linha",
+            CopyKind::Name => lang().word_name(),
+            CopyKind::Value => lang().word_value(),
+            CopyKind::Line => lang().word_line(),
         };
-        format!("copiado: {what} de {}", self.current().name)
+        lang().copied(what, &self.current().name)
     }
 
     fn current(&self) -> &Var {

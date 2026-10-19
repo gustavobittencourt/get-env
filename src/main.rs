@@ -1,6 +1,7 @@
 mod cli;
 mod clipboard;
 mod format;
+mod i18n;
 mod matching;
 mod output;
 mod theme;
@@ -12,6 +13,7 @@ use std::io::{IsTerminal, Write};
 use std::process::ExitCode;
 
 use format::masked_line;
+use i18n::lang;
 use output::Footer;
 use theme::{Palette, Theme};
 use vars::Var;
@@ -43,7 +45,7 @@ fn main() -> ExitCode {
         Some(query) => {
             let found = select(query, &all);
             if found.is_empty() {
-                return report(&theme, "nenhuma variável casa com ", query);
+                return report(&theme, lang().no_match(), query);
             }
             found
         }
@@ -80,7 +82,7 @@ fn main() -> ExitCode {
         // A tabela recebe tudo; a query vira o filtro inicial da busca.
         let filter = args.query.as_deref().unwrap_or("");
         if let Err(e) = tui::run(all, filter, palette(&theme)) {
-            return report(&theme, &format!("erro na tabela: {e}"), "");
+            return report(&theme, &lang().table_error(&e), "");
         }
     } else if let Some(code) = print_masked(&found) {
         return code;
@@ -115,7 +117,7 @@ fn print_masked(vars: &[Var]) -> Option<ExitCode> {
                 return Some(ExitCode::SUCCESS);
             }
             Err(e) => {
-                let text = format!("erro ao escrever: {e}");
+                let text = lang().write_error(&e);
                 eprintln!("{}", output::error_line(&text, "", None));
                 return Some(ExitCode::from(1));
             }

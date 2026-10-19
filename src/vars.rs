@@ -3,6 +3,8 @@
 use std::ffi::OsString;
 use std::path::Path;
 
+use crate::i18n::lang;
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Var {
     pub name: String,
@@ -35,10 +37,9 @@ pub fn from_env() -> Vec<Var> {
 /// produz, como a função `get_env` do profile.
 pub fn from_file(path: &Path) -> Result<Vec<Var>, String> {
     if !path.is_file() {
-        return Err(format!("arquivo não encontrado: {}", path.display()));
+        return Err(lang().file_not_found(path));
     }
-    let content =
-        std::fs::read(path).map_err(|e| format!("erro ao ler {}: {e}", path.display()))?;
+    let content = std::fs::read(path).map_err(|e| lang().read_error(path, &e))?;
     let names = defined_names(&String::from_utf8_lossy(&content));
     if names.is_empty() {
         return Ok(Vec::new());
@@ -49,18 +50,15 @@ pub fn from_file(path: &Path) -> Result<Vec<Var>, String> {
         .arg(path)
         .args(&names)
         .output()
-        .map_err(|e| format!("erro ao rodar o zsh: {e}"))?;
+        .map_err(|e| lang().zsh_failed(&e))?;
     // O stderr do zsh não aparece: ele pode citar trechos do arquivo, e
     // portanto valores sem máscara.
     if !output.status.success() {
         let code = output
             .status
             .code()
-            .map_or("sinal".to_string(), |c| c.to_string());
-        return Err(format!(
-            "erro ao ler {}: o zsh saiu com {code}",
-            path.display()
-        ));
+            .map_or(lang().signal().to_string(), |c| c.to_string());
+        return Err(lang().zsh_exit(path, &code));
     }
 
     let fields: Vec<&[u8]> = output.stdout.split(|&b| b == 0).collect();

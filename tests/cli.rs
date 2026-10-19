@@ -14,6 +14,7 @@ fn run(args: &[&str], envs: &[(&str, &str)]) -> (String, String, i32) {
         .args(args)
         .env_clear()
         .env("PATH", "/usr/bin:/bin")
+        .env("GET_ENV_LANG", "pt")
         .envs(envs.iter().copied())
         .stdin(Stdio::null())
         .output()
@@ -34,6 +35,7 @@ fn run_tty(args: &[&str], envs: &[(&str, &str)], clip_cmd: &str) -> (String, i32
         .env_clear()
         .env("PATH", "/usr/bin:/bin")
         .env("GET_ENV_CLIP_CMD", clip_cmd)
+        .env("GET_ENV_LANG", "pt")
         .envs(envs.iter().copied())
         .stdin(Stdio::null())
         .output()
@@ -169,7 +171,7 @@ fn many_pipe_lists_masked() {
 #[test]
 fn no_query_pipe_lists_all_sorted() {
     let (out, _, rc) = run(&[], &[("B", "2"), ("A", "1")]);
-    assert_eq!(out, "A=1\nB=2\nPATH=/usr/bin:/bin\n");
+    assert_eq!(out, "A=1\nB=2\nGET_ENV_LANG=pt\nPATH=/usr/bin:/bin\n");
     assert_eq!(rc, 0);
 }
 
@@ -211,6 +213,53 @@ fn bad_args_rc2() {
     let (_, err, rc) = run(&["a", "b"], &[]);
     assert_eq!(rc, 2);
     assert!(err.starts_with("uso: get-env"), "{err:?}");
+    assert!(err.contains("[-h|--help]"), "{err:?}");
+}
+
+#[test]
+fn english_by_override() {
+    let (_, err, rc) = run(&["zzz"], &[("GET_ENV_LANG", "en")]);
+    assert_eq!(err, "❌ no variable matches zzz\n");
+    assert_eq!(rc, 1);
+    let (_, err, _) = run(&["-f", "/nao/existe.env"], &[("GET_ENV_LANG", "en")]);
+    assert_eq!(err, "❌ file not found: /nao/existe.env\n");
+}
+
+#[test]
+fn english_by_lang() {
+    let (_, err, rc) = run(&["zzz"], &[("GET_ENV_LANG", ""), ("LANG", "en_US.UTF-8")]);
+    assert_eq!(err, "❌ no variable matches zzz\n");
+    assert_eq!(rc, 1);
+}
+
+#[test]
+fn c_locale_defers_to_lang() {
+    let envs = [
+        ("GET_ENV_LANG", ""),
+        ("LC_ALL", "C.UTF-8"),
+        ("LANG", "pt_BR.UTF-8"),
+    ];
+    let (_, err, _) = run(&["zzz"], &envs);
+    assert_eq!(err, "❌ nenhuma variável casa com zzz\n");
+}
+
+#[test]
+fn english_card_tty() {
+    let clip = temp_path("english-card");
+    let (out, rc) = run_tty(
+        &["fake_tok"],
+        &[
+            ("FAKE_TOKEN", "abcdefgh"),
+            ("GET_ENV_LANG", "en"),
+            ("NO_COLOR", "1"),
+        ],
+        &clip_into(&clip),
+    );
+    std::fs::remove_file(&clip).unwrap();
+    let out = strip(&out);
+    assert!(out.contains("🔒 masked"), "{out:?}");
+    assert!(out.contains("✅ value copied"), "{out:?}");
+    assert_eq!(rc, 0);
 }
 
 #[test]

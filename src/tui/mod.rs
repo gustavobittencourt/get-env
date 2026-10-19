@@ -27,6 +27,7 @@ use ratatui::{Frame, Terminal};
 
 use crate::clipboard;
 use crate::format::{display_value, fit, is_sensitive, width};
+use crate::i18n::lang;
 use crate::matching::highlight;
 use crate::theme::Palette;
 use crate::vars::Var;
@@ -36,14 +37,19 @@ use geometry::{Cell, Geometry};
 
 const DOUBLE_CLICK: Duration = Duration::from_millis(400);
 const ICON: &str = "⧉";
-const KEYS: [(&str, &str); 5] = [
-    ("⏎", "linha"),
-    ("n", "nome"),
-    ("v", "valor"),
-    ("/", "buscar"),
-    ("q", "sair"),
-];
 const LOCK: &str = " 🔒";
+
+/// Teclas do rodapé e o que cada uma faz.
+fn keys() -> [(&'static str, &'static str); 5] {
+    let l = lang();
+    [
+        ("⏎", l.word_line()),
+        ("n", l.word_name()),
+        ("v", l.word_value()),
+        ("/", l.word_search()),
+        ("q", l.word_quit()),
+    ]
+}
 
 /// Abre a tabela com todas as `vars` e `filter` como filtro inicial.
 pub fn run(vars: Vec<Var>, filter: &str, palette: Palette) -> io::Result<()> {
@@ -55,7 +61,7 @@ pub fn run(vars: Vec<Var>, filter: &str, palette: Palette) -> io::Result<()> {
         .map(|v| width(&v.name))
         .max()
         .unwrap_or(0)
-        .max("NOME".len());
+        .max(width(lang().header_name()));
     let name_width = u16::try_from(name_width).unwrap_or(u16::MAX);
 
     let _guard = TerminalGuard::enter()?;
@@ -107,7 +113,7 @@ pub fn run(vars: Vec<Var>, filter: &str, palette: Palette) -> io::Result<()> {
             Action::Copy(kind) => {
                 app.status = Some(match clipboard::copy(&app.copy_text(kind)) {
                     Ok(()) => Status::Ok(app.copied_status(kind)),
-                    Err(e) => Status::Err(format!("erro ao copiar: {e}")),
+                    Err(e) => Status::Err(lang().copy_failed(&e)),
                 });
             }
             Action::None => {}
@@ -139,11 +145,11 @@ fn areas(area: Rect) -> Areas {
 }
 
 fn title(app: &App) -> String {
-    let count = format!(" get-env · {} variáveis ", app.len());
+    let count = format!(" get-env · {} ", lang().var_count(app.len()));
     if app.filter.is_empty() {
         count
     } else {
-        format!("{count}· filtro: {} ", app.filter)
+        format!("{count}· {}: {} ", lang().filter(), app.filter)
     }
 }
 
@@ -170,8 +176,8 @@ fn render(
 
     let header = Row::new(geometry.order().map(|cell| match cell {
         Cell::Icon => "",
-        Cell::Name => "NOME",
-        Cell::Value => "VALOR",
+        Cell::Name => lang().header_name(),
+        Cell::Value => lang().header_value(),
     }))
     .style(palette.header);
     let rows = app.rows().into_iter().enumerate().map(|(i, var)| {
@@ -195,7 +201,7 @@ fn render(
     frame.render_stateful_widget(widget, table, state);
 
     if app.len() == 0 && table.height > 1 {
-        let message = format!("❌ nenhuma variável casa com {}", app.filter);
+        let message = format!("❌ {}{}", lang().no_match(), app.filter);
         let line = Rect::new(table.x, table.y + 1, table.width, 1);
         frame.render_widget(Paragraph::new(Span::styled(message, palette.err)), line);
     }
@@ -249,14 +255,15 @@ fn footer_line(app: &App, palette: &Palette) -> Line<'static> {
         return Line::from(vec![
             Span::styled(" / ", palette.key),
             Span::styled(format!("{}▌", app.filter), Style::new().bold()),
-            Span::styled("   Esc limpa", palette.secondary),
+            Span::styled(format!("   {}", lang().esc_clears()), palette.secondary),
         ]);
     }
     match &app.status {
         Some(Status::Ok(text)) => Line::styled(format!("✅ {text}"), palette.ok),
         Some(Status::Err(text)) => Line::styled(format!("❌ {text}"), palette.err),
         None => Line::from(
-            KEYS.iter()
+            keys()
+                .iter()
                 .flat_map(|(key, label)| {
                     [
                         Span::styled(format!(" {key} "), palette.key),
@@ -379,7 +386,7 @@ mod tests {
     fn title_counts_visible_rows_and_shows_filter() {
         assert_eq!(
             title(&App::new(vars(), "fake")),
-            " get-env · 1 variáveis · filtro: fake "
+            " get-env · 1 variável · filtro: fake "
         );
         assert_eq!(title(&App::new(vars(), "")), " get-env · 2 variáveis ");
         let buffer = draw(&App::new(vars(), ""), W, H);
