@@ -10,8 +10,7 @@ use std::time::{Duration, Instant};
 
 use ratatui::backend::CrosstermBackend;
 use ratatui::crossterm::event::{
-    self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEventKind, MouseButton,
-    MouseEventKind,
+    self, DisableMouseCapture, EnableMouseCapture, Event, KeyEventKind, MouseButton, MouseEventKind,
 };
 use ratatui::crossterm::execute;
 use ratatui::crossterm::terminal::{
@@ -25,7 +24,7 @@ use ratatui::{Frame, Terminal};
 use crate::clipboard;
 use crate::format::{display_value, fit, width};
 use crate::vars::Var;
-use app::{Action, App};
+use app::{Action, App, Status};
 use click::ClickTracker;
 use geometry::{Cell, Geometry, IconPos};
 
@@ -51,7 +50,7 @@ pub fn run(vars: Vec<Var>) -> io::Result<()> {
 
     let _guard = TerminalGuard::enter()?;
     let mut terminal = Terminal::new(CrosstermBackend::new(io::stdout()))?;
-    let mut app = App::new(vars);
+    let mut app = App::new(vars, "");
     let mut state = TableState::default().with_selected(Some(0));
     let mut clicks = ClickTracker::new(DOUBLE_CLICK);
 
@@ -62,19 +61,23 @@ pub fn run(vars: Vec<Var>) -> io::Result<()> {
         terminal.draw(|frame| render(frame, &app, &geometry, &mut state))?;
 
         let action = match event::read()? {
-            Event::Key(key) if key.kind == KeyEventKind::Press => app.on_key(key.code),
+            Event::Key(key) if key.kind == KeyEventKind::Press => app.on_key_event(key),
             Event::Mouse(mouse) => match mouse.kind {
                 MouseEventKind::Down(MouseButton::Left) => {
                     let hit = (mouse.row < table_height)
-                        .then(|| {
-                            geometry.hit(mouse.column, mouse.row, state.offset(), app.vars.len())
-                        })
+                        .then(|| geometry.hit(mouse.column, mouse.row, state.offset(), app.len()))
                         .flatten();
                     let double = hit.is_some_and(|target| clicks.register(target, Instant::now()));
                     app.on_click(hit, double)
                 }
-                MouseEventKind::ScrollDown => app.on_key(KeyCode::Down),
-                MouseEventKind::ScrollUp => app.on_key(KeyCode::Up),
+                MouseEventKind::ScrollDown => {
+                    app.step(true);
+                    Action::None
+                }
+                MouseEventKind::ScrollUp => {
+                    app.step(false);
+                    Action::None
+                }
                 _ => Action::None,
             },
             _ => Action::None,
@@ -84,10 +87,10 @@ pub fn run(vars: Vec<Var>) -> io::Result<()> {
         match action {
             Action::Quit => return Ok(()),
             Action::Copy(kind) => {
-                app.status = match clipboard::copy(&app.copy_text(kind)) {
-                    Ok(()) => app.copied_status(kind),
-                    Err(e) => format!("erro ao copiar: {e}"),
-                };
+                app.status = Some(match clipboard::copy(&app.copy_text(kind)) {
+                    Ok(()) => Status::Ok(app.copied_status(kind)),
+                    Err(e) => Status::Err(format!("erro ao copiar: {e}")),
+                });
             }
             Action::None => {}
         }
@@ -113,8 +116,8 @@ fn render(frame: &mut Frame, app: &App, geometry: &Geometry, state: &mut TableSt
     }))
     .bold();
     let rows = app
-        .vars
-        .iter()
+        .rows()
+        .into_iter()
         .map(|var| Row::new(geometry.order().map(|cell| cell_text(cell, var))));
 
     let table = Table::new(rows, geometry.widths())
@@ -125,10 +128,9 @@ fn render(frame: &mut Frame, app: &App, geometry: &Geometry, state: &mut TableSt
         .row_highlight_style(Style::new().reversed());
     frame.render_stateful_widget(table, table_area, state);
 
-    let status = if app.status.is_empty() {
-        HELP
-    } else {
-        &app.status
+    let status = match &app.status {
+        None => HELP,
+        Some(Status::Ok(text) | Status::Err(text)) => text,
     };
     frame.render_widget(Paragraph::new(status).dim(), status_area);
 }
@@ -167,16 +169,19 @@ mod tests {
     use ratatui::backend::TestBackend;
 
     fn draw(icon: IconPos) -> ratatui::buffer::Buffer {
-        let app = App::new(vec![
-            Var {
-                name: "FAKE_TOKEN".into(),
-                value: "abcdefgh".into(),
-            },
-            Var {
-                name: "HOME".into(),
-                value: "/tmp/fake".into(),
-            },
-        ]);
+        let app = App::new(
+            vec![
+                Var {
+                    name: "FAKE_TOKEN".into(),
+                    value: "abcdefgh".into(),
+                },
+                Var {
+                    name: "HOME".into(),
+                    value: "/tmp/fake".into(),
+                },
+            ],
+            "",
+        );
         let geometry = Geometry::new(40, 10, icon);
         let mut terminal = Terminal::new(TestBackend::new(40, 5)).unwrap();
         let mut state = TableState::default().with_selected(Some(0));
