@@ -3,7 +3,7 @@
 
 use ratatui::style::{Modifier, Style};
 
-use crate::format::{display_value, fit, is_sensitive, width, wrap};
+use crate::format::{display_value, escape, fit, is_sensitive, width, wrap};
 use crate::i18n::{HelpDoc, RowKind, lang};
 use crate::theme::{Palette, paint};
 
@@ -28,13 +28,14 @@ pub fn card(
     let shown = display_value(name, value);
     let masked_note = format!("  {}", lang().masked());
     let sensitive = is_sensitive(name);
+    let name_shown = escape(name);
     let body_width = width(&shown) + if sensitive { width(&masked_note) } else { 0 };
     let (foot, foot_style) = match footer {
         Footer::Copied => (lang().value_copied().to_string(), palette.ok),
         Footer::Failed(e) => (format!("❌ {}", lang().copy_failed(e)), palette.err),
     };
     let inner = (body_width + 2)
-        .max(width(name) + 3)
+        .max(width(&name_shown) + 3)
         .max(width(&foot) + 6)
         .max(MIN_INNER)
         .min(max_width.max(10) - 2);
@@ -45,7 +46,7 @@ pub fn card(
         palette.value
     };
 
-    let title = fit(name, inner - 3);
+    let title = fit(&name_shown, inner - 3);
     let mut out = format!(
         "{}{}{}\n",
         border("╭─ "),
@@ -202,6 +203,14 @@ mod tests {
                 "╰───────  ✅ valor copiado  ─╯\n",
             )
         );
+    }
+
+    #[test]
+    fn card_escapes_control_chars_in_name() {
+        let p = Palette::of(Theme::Mono);
+        let out = card("A\u{7}B", "1", &Footer::Copied, &p, 80);
+        assert!(!out.contains('\u{7}'), "{out:?}");
+        assert!(strip(&out).starts_with("╭─ A\\x07B ─"), "{out:?}");
     }
 
     #[test]

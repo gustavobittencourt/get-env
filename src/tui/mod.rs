@@ -26,7 +26,7 @@ use ratatui::widgets::{
 use ratatui::{Frame, Terminal};
 
 use crate::clipboard;
-use crate::format::{display_value, fit, is_sensitive, width};
+use crate::format::{display_value, escape, fit, is_sensitive, width};
 use crate::i18n::{RowKind, lang};
 use crate::matching::highlight;
 use crate::theme::Palette;
@@ -59,7 +59,7 @@ pub fn run(vars: Vec<Var>, filter: &str, palette: Palette) -> io::Result<()> {
     }
     let name_width = vars
         .iter()
-        .map(|v| width(&v.name))
+        .map(|v| width(&escape(&v.name)))
         .max()
         .unwrap_or(0)
         .max(width(lang().header_name()));
@@ -265,11 +265,18 @@ fn help_popup(frame: &mut Frame, area: Rect, palette: &Palette) {
     );
 }
 
-/// Nome cortado na largura da coluna, com as letras casadas destacadas.
+/// Nome escapado e cortado na largura da coluna, com as letras casadas
+/// destacadas. Nome com caractere de controle fica sem destaque: o escape
+/// desloca as posições que `highlight` devolve.
 fn name_line(var: &Var, filter: &str, geometry: &Geometry, palette: &Palette) -> Line<'static> {
-    let shown = fit(&var.name, usize::from(geometry.name_width));
-    let marks = highlight(filter, &var.name);
-    let cut = shown != var.name;
+    let name = escape(&var.name);
+    let shown = fit(&name, usize::from(geometry.name_width));
+    let marks = if name == var.name {
+        highlight(filter, &var.name)
+    } else {
+        Vec::new()
+    };
+    let cut = shown != name;
     let last = shown.chars().count().saturating_sub(1);
     Line::from(
         shown
@@ -538,6 +545,18 @@ mod tests {
         for w in 0..14 {
             draw(&App::new(vars(), ""), w, 6);
         }
+    }
+
+    #[test]
+    fn name_with_control_chars_is_escaped() {
+        let vars = vec![Var {
+            name: "A\u{7}B".into(),
+            value: "1".into(),
+        }];
+        let buffer = draw(&App::new(vars, ""), W, H);
+        let row = row_text(&buffer, table_area(W, H).y + 1);
+        assert!(row.contains("A\\x07B"), "{row}");
+        assert!(!row.contains('\u{7}'), "{row:?}");
     }
 
     /// O `?` mostra as teclas da seção de atalhos do mesmo `--help`.

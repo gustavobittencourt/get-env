@@ -147,6 +147,7 @@ static HELP_PT: HelpDoc = HelpDoc {
                     "-f, --file <arq>",
                     "lê as variáveis do arquivo .env, não do ambiente",
                 ),
+                ("", "executa o arquivo no zsh: use só .env confiável"),
                 ("-h, --help", "mostra esta ajuda"),
             ],
         },
@@ -229,6 +230,7 @@ static HELP_EN: HelpDoc = HelpDoc {
                     "-f, --file <file>",
                     "reads the .env file instead of the environment",
                 ),
+                ("", "runs the file in zsh: use trusted .env files only"),
                 ("-h, --help", "shows this help"),
             ],
         },
@@ -587,6 +589,27 @@ mod tests {
         assert_eq!(En.word_help(), "help");
         assert_eq!(Pt.word_help(), "ajuda");
         assert_eq!(En.any_key_closes(), "any key closes");
+    }
+
+    #[test]
+    fn help_warns_that_file_is_executed() {
+        for (lang, title, warning) in [
+            (
+                Pt,
+                "ARGUMENTOS",
+                "executa o arquivo no zsh: use só .env confiável",
+            ),
+            (
+                En,
+                "ARGUMENTS",
+                "runs the file in zsh: use trusted .env files only",
+            ),
+        ] {
+            let section = lang.help().sections.iter().find(|s| s.title == title);
+            let rows = section.unwrap().rows;
+            let file = rows.iter().position(|(l, _)| l.starts_with("-f")).unwrap();
+            assert_eq!(rows[file + 1], ("", warning), "{lang:?}");
+        }
     }
 
     #[test]

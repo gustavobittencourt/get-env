@@ -3,7 +3,7 @@
 use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 use super::geometry::Cell;
-use crate::format::shell_line;
+use crate::format::{escape, shell_line};
 use crate::i18n::lang;
 use crate::matching;
 use crate::vars::Var;
@@ -173,7 +173,7 @@ impl App {
             CopyKind::Value => lang().word_value(),
             CopyKind::Line => lang().word_line(),
         };
-        lang().copied(what, &self.current().name)
+        lang().copied(what, &escape(&self.current().name))
     }
 
     fn current(&self) -> &Var {
@@ -463,6 +463,17 @@ mod tests {
             a.copied_status(CopyKind::Line),
             "copiado: linha de FAKE_TOKEN"
         );
+    }
+
+    #[test]
+    fn copied_status_escapes_name() {
+        let var = Var {
+            name: "A\u{1b}B".into(),
+            value: "1".into(),
+        };
+        let a = App::new(vec![var], "");
+        assert_eq!(a.copied_status(CopyKind::Name), "copiado: nome de A\\x1bB");
+        assert_eq!(a.copy_text(CopyKind::Name), "A\u{1b}B");
     }
 
     #[test]

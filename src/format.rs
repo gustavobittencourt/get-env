@@ -21,8 +21,14 @@ pub fn display_value(name: &str, value: &str) -> String {
         let head: String = value.chars().take(VISIBLE_CHARS).collect();
         format!("{head}…")
     };
-    let mut out = String::with_capacity(shown.len());
-    for c in shown.chars() {
+    escape(&shown)
+}
+
+/// Texto seguro para o terminal: todo caractere de controle sai escapado.
+/// Vale para valores e também para nomes, que podem vir de um `-f`.
+pub fn escape(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    for c in text.chars() {
         match c {
             '\n' => out.push_str("\\n"),
             '\r' => out.push_str("\\r"),
@@ -80,7 +86,7 @@ pub fn wrap(text: &str, width: usize) -> Vec<String> {
 }
 
 pub fn masked_line(name: &str, value: &str) -> String {
-    format!("{name}={}", display_value(name, value))
+    format!("{}={}", escape(name), display_value(name, value))
 }
 
 /// `NOME=valor` para o clipboard: valor real, com aspas simples só quando
@@ -145,6 +151,13 @@ mod tests {
             display_value("MSG", "a\u{1b}]0;X\u{7}\tb\u{9b}c\u{7f}"),
             "a\\x1b]0;X\\x07\\tb\\x9bc\\x7f"
         );
+    }
+
+    /// O nome também vai para o terminal: um `\x1b` nele não pode pintar a
+    /// tela nem mudar o título.
+    #[test]
+    fn masked_line_escapes_control_chars_in_name() {
+        assert_eq!(masked_line("A\u{1b}[2J\u{7}B", "1"), "A\\x1b[2J\\x07B=1");
     }
 
     #[test]
