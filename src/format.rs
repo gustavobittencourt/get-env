@@ -51,7 +51,6 @@ pub fn fit(text: &str, width: usize) -> String {
 }
 
 /// Quebra `text` em pedaços de até `width` colunas, sem partir caractere.
-#[cfg_attr(not(test), expect(dead_code))]
 pub fn wrap(text: &str, width: usize) -> Vec<String> {
     if width == 0 {
         return vec![text.to_string()];

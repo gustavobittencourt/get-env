@@ -47,20 +47,89 @@ fn clip_into(path: &Path) -> String {
     format!("cat > '{}'", path.display())
 }
 
+/// Tira as sequências `\x1b[…m`.
+fn strip(s: &str) -> String {
+    let mut out = String::new();
+    let mut chars = s.chars();
+    while let Some(c) = chars.next() {
+        if c == '\x1b' {
+            for c in chars.by_ref() {
+                if c == 'm' {
+                    break;
+                }
+            }
+        } else {
+            out.push(c);
+        }
+    }
+    out
+}
+
 #[test]
-fn unique_tty_prints_masked_and_copies_value() {
+fn unique_tty_prints_card_and_copies_value() {
     let clip = temp_path("unique-tty");
     let (out, rc) = run_tty(
         &["fake_tok"],
-        &[("FAKE_TOKEN", "abcdefgh"), ("OTHER", "1")],
+        &[
+            ("FAKE_TOKEN", "abcdefgh"),
+            ("OTHER", "1"),
+            ("NO_COLOR", "1"),
+        ],
         &clip_into(&clip),
     );
     let copied = std::fs::read_to_string(&clip).unwrap();
     std::fs::remove_file(&clip).unwrap();
-    assert!(out.contains("FAKE_TOKEN=abcde…\n"), "{out:?}");
-    assert!(out.contains("copiado: valor de FAKE_TOKEN\n"), "{out:?}");
+    let out = strip(&out);
+    assert!(out.contains("╭─ FAKE_TOKEN "), "{out:?}");
+    assert!(out.contains("│ abcde…  🔒 mascarado"), "{out:?}");
+    assert!(out.contains("✅ valor copiado"), "{out:?}");
+    assert!(!out.contains("copiado: valor de"), "{out:?}");
     assert_eq!(rc, 0);
     assert_eq!(copied, "abcdefgh");
+}
+
+#[test]
+fn unique_tty_uses_forced_theme() {
+    let clip = temp_path("unique-theme");
+    let (out, rc) = run_tty(
+        &["fake_tok"],
+        &[("FAKE_TOKEN", "abcdefgh"), ("GET_ENV_THEME", "dark")],
+        &clip_into(&clip),
+    );
+    std::fs::remove_file(&clip).unwrap();
+    assert!(out.contains("\x1b[38;2;180;190;254m"), "{out:?}");
+    assert_eq!(rc, 0);
+}
+
+#[test]
+fn pipe_output_has_no_escapes() {
+    let file = temp_path("no-escapes.env");
+    std::fs::write(&file, "FILE_VAR=ok\n").unwrap();
+    let theme = ("GET_ENV_THEME", "dark");
+    let vars = [
+        ("FAKE_TOKEN", "abcdefgh"),
+        ("OPENAI_API_KEY", "sk-123456"),
+        ("OPENAI_ORG", "org1"),
+        theme,
+    ];
+    let cases: [&[&str]; 5] = [
+        &["fake_tok"],
+        &["openai"],
+        &["zzz"],
+        &["-f", "/nao/existe.env"],
+        &["-f", file.to_str().unwrap()],
+    ];
+    for args in cases {
+        let (out, err, _) = run(args, &vars);
+        assert!(
+            !out.contains('\x1b') && !err.contains('\x1b'),
+            "{args:?}: {out:?} {err:?}"
+        );
+    }
+    std::fs::remove_file(&file).unwrap();
+    let (out, _, rc) = run(&["fake_tok"], &vars);
+    assert_eq!(out, "FAKE_TOKEN=abcde…\n");
+    assert_eq!(rc, 0);
 }
 
 #[test]
@@ -81,7 +150,7 @@ fn unique_pipe_prints_masked_no_clipboard() {
 fn zero_matches_rc1() {
     let (out, err, rc) = run(&["zzz"], &[]);
     assert_eq!(out, "");
-    assert_eq!(err, "nenhuma variável casa com zzz\n");
+    assert_eq!(err, "❌ nenhuma variável casa com zzz\n");
     assert_eq!(rc, 1);
 }
 
@@ -116,15 +185,20 @@ fn file_flag_reads_only_file() {
 fn missing_file_rc1() {
     let (out, err, rc) = run(&["-f", "/nao/existe.env"], &[]);
     assert_eq!(out, "");
-    assert_eq!(err, "arquivo não encontrado: /nao/existe.env\n");
+    assert_eq!(err, "❌ arquivo não encontrado: /nao/existe.env\n");
     assert_eq!(rc, 1);
 }
 
 #[test]
 fn clipboard_failure_rc1() {
-    let (out, rc) = run_tty(&["fake_tok"], &[("FAKE_TOKEN", "abcdefgh")], "exit 3");
+    let (out, rc) = run_tty(
+        &["fake_tok"],
+        &[("FAKE_TOKEN", "abcdefgh"), ("NO_COLOR", "1")],
+        "exit 3",
+    );
+    let out = strip(&out);
     assert!(
-        out.contains("erro ao copiar: comando de clipboard saiu com 3\n"),
+        out.contains("❌ erro ao copiar: comando de clipboard saiu com 3"),
         "{out:?}"
     );
     assert_eq!(rc, 1);

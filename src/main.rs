@@ -2,22 +2,32 @@ mod cli;
 mod clipboard;
 mod format;
 mod matching;
+mod output;
 #[expect(dead_code)]
 mod theme;
 mod tui;
 mod vars;
 
+use std::cell::OnceCell;
 use std::io::{IsTerminal, Write};
 use std::process::ExitCode;
 
 use format::masked_line;
+use output::Footer;
+use theme::{Palette, Theme};
 use vars::Var;
 
 fn main() -> ExitCode {
+    // O tema só é detectado quando alguma saída vai mesmo ser colorida.
+    let theme = OnceCell::new();
+
     let args = match cli::parse(std::env::args().skip(1)) {
         Ok(args) => args,
         Err(usage) => {
-            eprintln!("{usage}");
+            eprintln!(
+                "{}",
+                output::usage_line(&usage, stderr_palette(&theme).as_ref())
+            );
             return ExitCode::from(2);
         }
     };
@@ -25,10 +35,7 @@ fn main() -> ExitCode {
     let all = match &args.file {
         Some(path) => match vars::from_file(path) {
             Ok(vars) => vars,
-            Err(e) => {
-                eprintln!("{e}");
-                return ExitCode::from(1);
-            }
+            Err(e) => return report(&theme, &e, ""),
         },
         None => vars::from_env(),
     };
@@ -37,8 +44,7 @@ fn main() -> ExitCode {
         Some(query) => {
             let found = select(query, all);
             if found.is_empty() {
-                eprintln!("nenhuma variável casa com {query}");
-                return ExitCode::from(1);
+                return report(&theme, "nenhuma variável casa com ", query);
             }
             found
         }
@@ -47,29 +53,54 @@ fn main() -> ExitCode {
 
     let tty = std::io::stdout().is_terminal();
     if args.query.is_some() && found.len() == 1 {
+        if !tty {
+            return print_masked(&found).unwrap_or(ExitCode::SUCCESS);
+        }
         let var = &found[0];
-        if let Some(code) = print_masked(&found) {
-            return code;
-        }
-        if tty {
-            if let Err(e) = clipboard::copy(&var.value) {
-                eprintln!("erro ao copiar: {e}");
-                return ExitCode::from(1);
-            }
-            eprintln!("copiado: valor de {}", var.name);
-        }
-        return ExitCode::SUCCESS;
+        let copied = clipboard::copy(&var.value);
+        let footer = match &copied {
+            Ok(()) => Footer::Copied,
+            Err(e) => Footer::Failed(e.clone()),
+        };
+        let max_width = match ratatui::crossterm::terminal::size() {
+            Ok((w, _)) if w > 0 => usize::from(w),
+            _ => 80,
+        };
+        print!(
+            "{}",
+            output::card(&var.name, &var.value, &footer, &palette(&theme), max_width)
+        );
+        return if copied.is_ok() {
+            ExitCode::SUCCESS
+        } else {
+            ExitCode::from(1)
+        };
     }
 
     if tty {
         if let Err(e) = tui::run(found) {
-            eprintln!("erro na tabela: {e}");
-            return ExitCode::from(1);
+            return report(&theme, &format!("erro na tabela: {e}"), "");
         }
     } else if let Some(code) = print_masked(&found) {
         return code;
     }
     ExitCode::SUCCESS
+}
+
+fn palette(theme: &OnceCell<Theme>) -> Palette {
+    Palette::of(*theme.get_or_init(theme::detect))
+}
+
+/// Paleta para o stderr: só quando ele é um terminal.
+fn stderr_palette(theme: &OnceCell<Theme>) -> Option<Palette> {
+    std::io::stderr().is_terminal().then(|| palette(theme))
+}
+
+/// Escreve a linha de erro no stderr e devolve rc 1.
+fn report(theme: &OnceCell<Theme>, text: &str, emphasis: &str) -> ExitCode {
+    let line = output::error_line(text, emphasis, stderr_palette(theme).as_ref());
+    eprintln!("{line}");
+    ExitCode::from(1)
 }
 
 /// Imprime as linhas mascaradas. Pipe fechado (`get-env | head`) encerra
@@ -83,7 +114,8 @@ fn print_masked(vars: &[Var]) -> Option<ExitCode> {
                 return Some(ExitCode::SUCCESS);
             }
             Err(e) => {
-                eprintln!("erro ao escrever: {e}");
+                let text = format!("erro ao escrever: {e}");
+                eprintln!("{}", output::error_line(&text, "", None));
                 return Some(ExitCode::from(1));
             }
         }
