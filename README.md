@@ -60,7 +60,7 @@ get-env -h|--help
 |---|---|
 | **um** resultado, no terminal | mostra o cartão e copia o valor |
 | **vários** resultados, ou sem `nome`, no terminal | abre a tabela, com o `nome` como filtro inicial |
-| saída em pipe ou arquivo | imprime `NOME=valor` mascarado, uma por linha, sem copiar |
+| saída em pipe ou arquivo | imprime `NOME=valor`, uma por linha, com os segredos mascarados e sem copiar |
 | `-f arquivo.env` | troca o ambiente pelas variáveis do arquivo |
 | `-h` ou `--help` | mostra a ajuda colorida, em qualquer posição |
 

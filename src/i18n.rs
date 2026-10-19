@@ -159,7 +159,7 @@ static HELP_PT: HelpDoc = HelpDoc {
                     "vários ou sem nome",
                     "abre a tabela interativa, filtrada pelo nome",
                 ),
-                ("em pipe", "imprime NOME=valor mascarado, sem copiar"),
+                ("em pipe", "imprime NOME=valor; segredos mascarados"),
             ],
         },
         Section {
@@ -176,7 +176,7 @@ static HELP_PT: HelpDoc = HelpDoc {
             kind: RowKind::Keys,
             rows: &[
                 ("↑ ↓", "move a seleção"),
-                ("⏎", "copia NOME='valor'"),
+                ("⏎", "copia NOME=valor"),
                 ("n", "copia o nome"),
                 ("v", "copia o valor"),
                 ("/", "busca; Esc limpa a busca"),
@@ -240,7 +240,7 @@ static HELP_EN: HelpDoc = HelpDoc {
                     "many or no name",
                     "opens the interactive table, filtered by name",
                 ),
-                ("piped", "prints NAME=value masked, copies nothing"),
+                ("piped", "prints NAME=value; secrets masked"),
             ],
         },
         Section {
@@ -260,7 +260,7 @@ static HELP_EN: HelpDoc = HelpDoc {
             kind: RowKind::Keys,
             rows: &[
                 ("↑ ↓", "moves the selection"),
-                ("⏎", "copies NAME='value'"),
+                ("⏎", "copies NAME=value"),
                 ("n", "copies the name"),
                 ("v", "copies the value"),
                 ("/", "search; Esc clears the search"),
@@ -531,6 +531,30 @@ mod tests {
     #[test]
     fn missing_defaults_binary_is_none() {
         assert_eq!(apple_languages("/nao/existe/defaults"), None);
+    }
+
+    #[test]
+    fn help_describes_copy_and_pipe_truthfully() {
+        let row = |lang: Lang, title: &str, left: &str| {
+            let section = lang.help().sections.iter().find(|s| s.title == title);
+            section
+                .unwrap()
+                .rows
+                .iter()
+                .find(|(l, _)| *l == left)
+                .unwrap()
+                .1
+        };
+        assert_eq!(row(Pt, "TABELA", "⏎"), "copia NOME=valor");
+        assert_eq!(row(En, "TABLE", "⏎"), "copies NAME=value");
+        assert_eq!(
+            row(Pt, "COMPORTAMENTO", "em pipe"),
+            "imprime NOME=valor; segredos mascarados"
+        );
+        assert_eq!(
+            row(En, "BEHAVIOR", "piped"),
+            "prints NAME=value; secrets masked"
+        );
     }
 
     #[test]
