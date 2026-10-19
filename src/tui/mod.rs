@@ -246,9 +246,10 @@ fn value_line(var: &Var, geometry: &Geometry, palette: &Palette) -> Line<'static
     ])
 }
 
-/// Busca em curso, mensagem da última ação ou as teclas.
+/// Mensagem da última ação (também no modo busca), busca em curso ou as
+/// teclas.
 fn footer_line(app: &App, palette: &Palette) -> Line<'static> {
-    if app.searching {
+    if app.searching && app.status.is_none() {
         return Line::from(vec![
             Span::styled(" / ", palette.key),
             Span::styled(format!("{}▌", app.filter), Style::new().bold()),
@@ -465,6 +466,11 @@ mod tests {
         let footer = row_text(&draw(IconPos::End, &app, WIDE, H), footer_y);
         assert!(footer.contains("/ ho▌"), "{footer}");
         assert!(footer.contains("Esc limpa"), "{footer}");
+
+        // Cópia pelo mouse durante a busca: o status aparece mesmo assim.
+        app.status = Some(Status::Err("erro ao copiar: saiu com 3".into()));
+        let footer = row_text(&draw(IconPos::End, &app, WIDE, H), footer_y);
+        assert!(footer.contains("❌ erro ao copiar: saiu com 3"), "{footer}");
     }
 
     #[test]

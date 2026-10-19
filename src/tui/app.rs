@@ -60,10 +60,14 @@ impl App {
         self.visible.len()
     }
 
-    /// Ctrl-C sai sempre, mesmo no modo busca.
+    /// Ctrl-C sai sempre, mesmo no modo busca; outras teclas com Ctrl não
+    /// fazem nada (Ctrl-V não pode copiar o valor como `v`).
     pub fn on_key_event(&mut self, key: KeyEvent) -> Action {
-        if key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('c') {
-            return Action::Quit;
+        if key.modifiers.contains(KeyModifiers::CONTROL) {
+            return match key.code {
+                KeyCode::Char('c') => Action::Quit,
+                _ => Action::None,
+            };
         }
         self.on_key(key.code)
     }
@@ -311,6 +315,19 @@ mod tests {
         let ctrl_c = KeyEvent::new(KeyCode::Char('c'), KeyModifiers::CONTROL);
         assert_eq!(a.on_key_event(ctrl_c), Action::Quit);
         assert_eq!(a.filter, "");
+    }
+
+    #[test]
+    fn other_ctrl_letters_are_ignored() {
+        let ctrl = |c| KeyEvent::new(KeyCode::Char(c), KeyModifiers::CONTROL);
+        let mut a = app();
+        for c in ['v', 'n', 'q'] {
+            assert_eq!(a.on_key_event(ctrl(c)), Action::None, "{c}");
+        }
+        a.on_key(KeyCode::Char('/'));
+        a.on_key(KeyCode::Char('m'));
+        assert_eq!(a.on_key_event(ctrl('w')), Action::None);
+        assert_eq!(a.filter, "m");
     }
 
     #[test]
