@@ -35,6 +35,8 @@ pub struct App {
     visible: Vec<usize>,
     pub filter: String,
     pub searching: bool,
+    /// Ajuda do `?` aberta por cima da tabela.
+    pub help: bool,
     pub selected: usize,
     pub status: Option<Status>,
 }
@@ -46,6 +48,7 @@ impl App {
             visible: Vec::new(),
             filter: filter.to_string(),
             searching: false,
+            help: false,
             selected: 0,
             status: None,
         };
@@ -73,19 +76,26 @@ impl App {
         self.on_key(key.code)
     }
 
+    /// Com a ajuda aberta, a tecla só a fecha. `j`, `k` e `?` são atalhos
+    /// apenas fora da busca, como `n`, `v` e `q`.
     pub fn on_key(&mut self, key: KeyCode) -> Action {
         self.status = None;
+        if self.help {
+            self.help = false;
+            return Action::None;
+        }
         if self.searching {
             self.on_search_key(key);
             return Action::None;
         }
         match key {
-            KeyCode::Up => self.step(false),
-            KeyCode::Down => self.step(true),
+            KeyCode::Up | KeyCode::Char('k') => self.step(false),
+            KeyCode::Down | KeyCode::Char('j') => self.step(true),
             KeyCode::Enter => return self.copy(CopyKind::Line),
             KeyCode::Char('n') => return self.copy(CopyKind::Name),
             KeyCode::Char('v') => return self.copy(CopyKind::Value),
             KeyCode::Char('/') => self.searching = true,
+            KeyCode::Char('?') => self.help = true,
             KeyCode::Esc if !self.filter.is_empty() => {
                 self.filter.clear();
                 self.refilter();
@@ -128,8 +138,13 @@ impl App {
     }
 
     /// Todo clique numa linha a seleciona; o ícone copia a linha no clique
-    /// simples, nome e valor só no duplo.
+    /// simples, nome e valor só no duplo. Com a ajuda aberta, o clique só a
+    /// fecha: a linha clicada está escondida atrás dela.
     pub fn on_click(&mut self, hit: Option<(usize, Cell)>, double: bool) -> Action {
+        if self.help {
+            self.help = false;
+            return Action::None;
+        }
         let Some((index, cell)) = hit.filter(|(index, _)| *index < self.len()) else {
             return Action::None;
         };
@@ -241,6 +256,62 @@ mod tests {
             assert_eq!(a.on_key(KeyCode::Char(c)), Action::None);
         }
         assert_eq!(a.filter, "nvq");
+    }
+
+    #[test]
+    fn j_k_move_like_arrows() {
+        let mut a = app();
+        for _ in 0..3 {
+            assert_eq!(a.on_key(KeyCode::Char('j')), Action::None);
+        }
+        assert_eq!(a.selected, 2);
+        assert_eq!(a.on_key(KeyCode::Char('k')), Action::None);
+        assert_eq!(a.selected, 1);
+    }
+
+    #[test]
+    fn j_k_and_question_mark_type_while_searching() {
+        let mut a = app();
+        a.on_key(KeyCode::Char('/'));
+        for c in ['j', 'k', '?'] {
+            assert_eq!(a.on_key(KeyCode::Char(c)), Action::None);
+        }
+        assert_eq!(a.filter, "jk?");
+        assert_eq!(a.selected, 0);
+        assert!(!a.help);
+    }
+
+    #[test]
+    fn question_mark_opens_help_and_next_key_only_closes_it() {
+        let mut a = app();
+        assert_eq!(a.on_key(KeyCode::Char('?')), Action::None);
+        assert!(a.help);
+        for key in [KeyCode::Char('q'), KeyCode::Esc, KeyCode::Enter] {
+            a.help = true;
+            assert_eq!(a.on_key(key), Action::None, "{key:?}");
+            assert!(!a.help);
+        }
+        a.help = true;
+        a.on_key(KeyCode::Char('j'));
+        assert_eq!(a.selected, 0);
+        assert_eq!(a.on_key(KeyCode::Char('q')), Action::Quit);
+    }
+
+    #[test]
+    fn ctrl_c_quits_from_help() {
+        let mut a = app();
+        a.on_key(KeyCode::Char('?'));
+        let ctrl_c = KeyEvent::new(KeyCode::Char('c'), KeyModifiers::CONTROL);
+        assert_eq!(a.on_key_event(ctrl_c), Action::Quit);
+    }
+
+    #[test]
+    fn click_closes_help_without_copying() {
+        let mut a = app();
+        a.on_key(KeyCode::Char('?'));
+        assert_eq!(a.on_click(Some((2, Cell::Icon)), false), Action::None);
+        assert!(!a.help);
+        assert_eq!(a.selected, 0);
     }
 
     #[test]

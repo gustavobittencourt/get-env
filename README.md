@@ -80,13 +80,16 @@ Sem diferenciar maiúsculas de minúsculas, nesta ordem:
 
 | tecla ou gesto | ação |
 |---|---|
-| `↑` `↓` ou rolagem | move a seleção |
+| `↑` `↓`, `j` `k` ou rolagem | move a seleção |
 | `⏎` ou clique no `⧉` | copia a linha `NOME='valor'`, com aspas só quando o shell precisa |
 | `n` / duplo clique no nome | copia o nome |
 | `v` / duplo clique no valor | copia o valor |
 | `/` | busca ao vivo; `⏎` ou `↓` confirmam, `Esc` limpa |
+| `?` | mostra estes atalhos; qualquer tecla fecha |
 | `Esc` | limpa o filtro; sem filtro, sai |
 | `q` ou `Ctrl-C` | sai |
+
+Durante a busca, tudo o que você digita vai para o filtro: `j`, `k`, `n`, `v`, `q` e `?` só são atalhos fora dela.
 
 ### Máscara
 

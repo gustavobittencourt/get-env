@@ -175,12 +175,13 @@ static HELP_PT: HelpDoc = HelpDoc {
             title: "TABELA",
             kind: RowKind::Keys,
             rows: &[
-                ("↑ ↓", "move a seleção"),
+                ("↑ ↓ j k", "move a seleção"),
                 ("⏎", "copia NOME=valor"),
                 ("n", "copia o nome"),
                 ("v", "copia o valor"),
                 ("/", "busca; Esc limpa a busca"),
                 ("Esc", "limpa o filtro ou sai"),
+                ("?", "mostra estas teclas"),
                 ("q", "sai"),
                 ("⧉", "clique copia a linha"),
                 ("2× clique", "no nome ou no valor copia o que foi clicado"),
@@ -259,12 +260,13 @@ static HELP_EN: HelpDoc = HelpDoc {
             title: "TABLE",
             kind: RowKind::Keys,
             rows: &[
-                ("↑ ↓", "moves the selection"),
+                ("↑ ↓ j k", "moves the selection"),
                 ("⏎", "copies NAME=value"),
                 ("n", "copies the name"),
                 ("v", "copies the value"),
                 ("/", "search; Esc clears the search"),
                 ("Esc", "clears the filter or quits"),
+                ("?", "shows these keys"),
                 ("q", "quits"),
                 ("⧉", "click copies the line"),
                 ("2× click", "on the name or value copies what was clicked"),
@@ -435,6 +437,12 @@ impl Lang {
     pub fn esc_clears(self) -> &'static str {
         self.pick("Esc limpa", "Esc clears")
     }
+    pub fn word_help(self) -> &'static str {
+        self.pick("ajuda", "help")
+    }
+    pub fn any_key_closes(self) -> &'static str {
+        self.pick("qualquer tecla fecha", "any key closes")
+    }
 
     pub fn copied(self, what: &str, name: &str) -> String {
         self.pick(
@@ -555,6 +563,30 @@ mod tests {
             row(En, "BEHAVIOR", "piped"),
             "prints NAME=value; secrets masked"
         );
+    }
+
+    #[test]
+    fn help_lists_vim_keys_and_help_key() {
+        let keys = |lang: Lang| {
+            let section = lang
+                .help()
+                .sections
+                .iter()
+                .find(|s| s.kind == RowKind::Keys);
+            section
+                .unwrap()
+                .rows
+                .iter()
+                .map(|(l, _)| *l)
+                .collect::<Vec<_>>()
+        };
+        for lang in [Pt, En] {
+            assert!(keys(lang).contains(&"↑ ↓ j k"), "{lang:?}");
+            assert!(keys(lang).contains(&"?"), "{lang:?}");
+        }
+        assert_eq!(En.word_help(), "help");
+        assert_eq!(Pt.word_help(), "ajuda");
+        assert_eq!(En.any_key_closes(), "any key closes");
     }
 
     #[test]

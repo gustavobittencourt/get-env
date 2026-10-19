@@ -1,5 +1,5 @@
 //! Tabela interativa com mouse: duplo clique copia a célula, Enter ou o
-//! ícone copiam a linha, `/` filtra.
+//! ícone copiam a linha, `/` filtra, `?` mostra os atalhos.
 
 mod app;
 mod click;
@@ -20,14 +20,14 @@ use ratatui::layout::{Constraint, Flex, Layout, Position, Rect};
 use ratatui::style::Style;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{
-    Block, BorderType, Cell as TableCell, HighlightSpacing, Padding, Paragraph, Row, Table,
+    Block, BorderType, Cell as TableCell, Clear, HighlightSpacing, Padding, Paragraph, Row, Table,
     TableState,
 };
 use ratatui::{Frame, Terminal};
 
 use crate::clipboard;
 use crate::format::{display_value, fit, is_sensitive, width};
-use crate::i18n::lang;
+use crate::i18n::{RowKind, lang};
 use crate::matching::highlight;
 use crate::theme::Palette;
 use crate::vars::Var;
@@ -40,13 +40,14 @@ const ICON: &str = "⧉";
 const LOCK: &str = " 🔒";
 
 /// Teclas do rodapé e o que cada uma faz.
-fn keys() -> [(&'static str, &'static str); 5] {
+fn keys() -> [(&'static str, &'static str); 6] {
     let l = lang();
     [
         ("⏎", l.word_line()),
         ("n", l.word_name()),
         ("v", l.word_value()),
         ("/", l.word_search()),
+        ("?", l.word_help()),
         ("q", l.word_quit()),
     ]
 }
@@ -207,6 +208,61 @@ fn render(
     }
 
     frame.render_widget(Paragraph::new(footer_line(app, palette)), footer);
+
+    if app.help {
+        help_popup(frame, area, palette);
+    }
+}
+
+/// A seção de atalhos do `--help`, numa caixa centrada por cima da tabela.
+fn help_popup(frame: &mut Frame, area: Rect, palette: &Palette) {
+    let doc = lang().help();
+    let Some(section) = doc.sections.iter().find(|s| s.kind == RowKind::Keys) else {
+        return;
+    };
+    let column = section
+        .rows
+        .iter()
+        .map(|(key, _)| width(key) + 2)
+        .max()
+        .unwrap_or(0)
+        + 2;
+    let mut lines = vec![Line::styled(section.title, palette.header)];
+    lines.extend(section.rows.iter().map(|(key, description)| {
+        let key = format!(" {key} ");
+        let gap = " ".repeat(column - width(&key));
+        Line::from(vec![
+            Span::styled(key, palette.key),
+            Span::raw(gap),
+            Span::styled(*description, palette.value),
+        ])
+    }));
+    lines.push(Line::default());
+    lines.push(Line::styled(lang().any_key_closes(), palette.secondary));
+
+    // Moldura e respiro somam 4 colunas e 2 linhas.
+    let content = lines.iter().map(Line::width).max().unwrap_or(0);
+    let w = u16::try_from(content + 4)
+        .unwrap_or(u16::MAX)
+        .min(area.width);
+    let h = u16::try_from(lines.len() + 2)
+        .unwrap_or(u16::MAX)
+        .min(area.height);
+    let popup = Rect::new(
+        area.x + (area.width - w) / 2,
+        area.y + (area.height - h) / 2,
+        w,
+        h,
+    );
+    let title = Line::from(vec![
+        Span::styled(" get-env ", palette.title),
+        Span::styled(format!("· {} ", lang().word_help()), palette.secondary),
+    ]);
+    frame.render_widget(Clear, popup);
+    frame.render_widget(
+        Paragraph::new(lines).block(frame_block().border_style(palette.border).title(title)),
+        popup,
+    );
 }
 
 /// Nome cortado na largura da coluna, com as letras casadas destacadas.
@@ -451,12 +507,12 @@ mod tests {
 
     #[test]
     fn footer_shows_keys_status_and_search() {
-        // As 5 pastilhas ocupam ~53 colunas; em 40 o rodapé é cortado.
-        const WIDE: u16 = 60;
+        // As 6 pastilhas ocupam ~64 colunas; em 40 o rodapé é cortado.
+        const WIDE: u16 = 72;
         let footer_y = areas(Rect::new(0, 0, WIDE, H)).footer.y;
         let buffer = draw(&App::new(vars(), ""), WIDE, H);
         let footer = row_text(&buffer, footer_y);
-        for part in ["⏎", "linha", "/", "buscar", "q", "sair"] {
+        for part in ["⏎", "linha", "/", "buscar", "?", "ajuda", "q", "sair"] {
             assert!(footer.contains(part), "{part}: {footer}");
         }
 
@@ -481,6 +537,39 @@ mod tests {
     fn narrow_terminal_draws_without_panic() {
         for w in 0..14 {
             draw(&App::new(vars(), ""), w, 6);
+        }
+    }
+
+    /// O `?` mostra as teclas da seção de atalhos do mesmo `--help`.
+    #[test]
+    fn help_overlay_lists_table_keys_from_help_doc() {
+        let mut app = App::new(vars(), "");
+        app.help = true;
+        let buffer = draw(&app, 72, 18);
+        let screen: String = (0..18).map(|y| row_text(&buffer, y) + "\n").collect();
+        let section = lang()
+            .help()
+            .sections
+            .iter()
+            .find(|s| s.kind == RowKind::Keys)
+            .unwrap();
+        assert!(screen.contains(section.title), "{screen}");
+        for (key, description) in section.rows {
+            assert!(screen.contains(&format!(" {key} ")), "{key}: {screen}");
+            assert!(screen.contains(description), "{description}: {screen}");
+        }
+        assert!(screen.contains("j k"), "{screen}");
+        assert!(screen.contains("qualquer tecla fecha"), "{screen}");
+    }
+
+    #[test]
+    fn help_overlay_in_tiny_terminal_draws_without_panic() {
+        let mut app = App::new(vars(), "");
+        app.help = true;
+        for w in 0..30 {
+            for h in 0..14 {
+                draw(&app, w, h);
+            }
         }
     }
 }
