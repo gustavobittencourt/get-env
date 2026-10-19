@@ -9,15 +9,8 @@ pub enum Cell {
     Value,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub enum IconPos {
-    Start,
-    End,
-}
-
 #[derive(Clone, Copy, Debug)]
 pub struct Geometry {
-    pub icon: IconPos,
     pub name_width: u16,
     pub value_width: u16,
 }
@@ -28,11 +21,10 @@ const SPACING: u16 = 1;
 impl Geometry {
     /// Ícone com 3 colunas, nome com até metade da largura, valor no resto,
     /// 1 coluna de espaço entre elas.
-    pub fn new(width: u16, name_width: u16, icon: IconPos) -> Geometry {
+    pub fn new(width: u16, name_width: u16) -> Geometry {
         let name_width = name_width.min(width / 2);
         let value_width = width.saturating_sub(ICON_WIDTH + name_width + 2 * SPACING);
         Geometry {
-            icon,
             name_width,
             value_width,
         }
@@ -44,11 +36,9 @@ impl Geometry {
         [first, second, third].map(|cell| Constraint::Length(self.width_of(cell)))
     }
 
+    /// Ícone de copiar antes do nome (escolha do user no UAT).
     pub fn order(&self) -> [Cell; 3] {
-        match self.icon {
-            IconPos::Start => [Cell::Icon, Cell::Name, Cell::Value],
-            IconPos::End => [Cell::Name, Cell::Value, Cell::Icon],
-        }
+        [Cell::Icon, Cell::Name, Cell::Value]
     }
 
     /// Célula sob o clique. Linha 0 é o cabeçalho; a linha `r` da tela é o
@@ -84,7 +74,7 @@ mod tests {
 
     #[test]
     fn hit_with_icon_at_start() {
-        let g = Geometry::new(80, 20, IconPos::Start);
+        let g = Geometry::new(80, 20);
         assert_eq!(g.hit(1, 1, 0, 5), Some((0, Cell::Icon)));
         assert_eq!(g.hit(10, 2, 0, 5), Some((1, Cell::Name)));
         assert_eq!(g.hit(40, 1, 3, 5), Some((3, Cell::Value)));
@@ -92,21 +82,14 @@ mod tests {
 
     #[test]
     fn hit_ignores_header_and_rows_past_data() {
-        let g = Geometry::new(80, 20, IconPos::Start);
+        let g = Geometry::new(80, 20);
         assert_eq!(g.hit(10, 0, 0, 5), None);
         assert_eq!(g.hit(10, 9, 0, 5), None);
     }
 
     #[test]
-    fn hit_with_icon_at_end() {
-        let g = Geometry::new(80, 20, IconPos::End);
-        assert_eq!(g.hit(79, 1, 0, 5), Some((0, Cell::Icon)));
-        assert_eq!(g.hit(0, 1, 0, 5), Some((0, Cell::Name)));
-    }
-
-    #[test]
     fn narrow_terminal_does_not_panic() {
-        let g = Geometry::new(10, 40, IconPos::End);
+        let g = Geometry::new(10, 40);
         for column in 0..=20 {
             let hit = g.hit(column, 1, 0, 1);
             assert!(hit.is_none() || hit.is_some_and(|(i, _)| i == 0));

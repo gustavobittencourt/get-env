@@ -32,7 +32,7 @@ use crate::theme::Palette;
 use crate::vars::Var;
 use app::{Action, App, Status};
 use click::ClickTracker;
-use geometry::{Cell, Geometry, IconPos};
+use geometry::{Cell, Geometry};
 
 const DOUBLE_CLICK: Duration = Duration::from_millis(400);
 const ICON: &str = "⧉";
@@ -50,10 +50,6 @@ pub fn run(vars: Vec<Var>, filter: &str, palette: Palette) -> io::Result<()> {
     if vars.is_empty() {
         return Ok(());
     }
-    let icon = match std::env::var("GET_ENV_ICON_POS").as_deref() {
-        Ok("start") => IconPos::Start,
-        _ => IconPos::End,
-    };
     let name_width = vars
         .iter()
         .map(|v| width(&v.name))
@@ -71,7 +67,7 @@ pub fn run(vars: Vec<Var>, filter: &str, palette: Palette) -> io::Result<()> {
     loop {
         let size = terminal.size()?;
         let table = areas(Rect::new(0, 0, size.width, size.height)).table;
-        let geometry = Geometry::new(table.width, name_width, icon);
+        let geometry = Geometry::new(table.width, name_width);
         state.select(Some(app.selected));
         terminal.draw(|frame| render(frame, &app, &geometry, &palette, &mut state))?;
 
@@ -328,9 +324,9 @@ mod tests {
         areas(Rect::new(0, 0, w, h)).table
     }
 
-    fn draw(icon: IconPos, app: &App, w: u16, h: u16) -> Buffer {
+    fn draw(app: &App, w: u16, h: u16) -> Buffer {
         let palette = Palette::of(Theme::Dark);
-        let geometry = Geometry::new(table_area(w, h).width, 10, icon);
+        let geometry = Geometry::new(table_area(w, h).width, 10);
         let mut terminal = Terminal::new(TestBackend::new(w, h)).unwrap();
         let mut state = TableState::default().with_selected(Some(app.selected));
         terminal
@@ -366,18 +362,17 @@ mod tests {
     #[test]
     fn rendered_cells_match_geometry() {
         let table = table_area(W, H);
-        for icon in [IconPos::Start, IconPos::End] {
-            let buffer = draw(icon, &App::new(vars(), ""), W, H);
-            let geometry = Geometry::new(table.width, 10, icon);
-            let y = table.y + 2;
-            let name_x = table.x + column_of(&geometry, 1, Cell::Name);
-            let value_x = table.x + column_of(&geometry, 1, Cell::Value);
-            let icon_x = table.x + column_of(&geometry, 1, Cell::Icon);
-            assert_eq!(text_at(&buffer, name_x, y, 4), "HOME", "{icon:?}");
-            assert_eq!(text_at(&buffer, value_x, y, 9), "/tmp/fake", "{icon:?}");
-            assert_eq!(text_at(&buffer, icon_x + 1, y, 1), ICON, "{icon:?}");
-            assert_eq!(text_at(&buffer, value_x, y - 1, 6), "abcde…", "{icon:?}");
-        }
+        let buffer = draw(&App::new(vars(), ""), W, H);
+        let geometry = Geometry::new(table.width, 10);
+        let y = table.y + 2;
+        let name_x = table.x + column_of(&geometry, 1, Cell::Name);
+        let value_x = table.x + column_of(&geometry, 1, Cell::Value);
+        let icon_x = table.x + column_of(&geometry, 1, Cell::Icon);
+        assert!(icon_x < name_x, "ícone antes do nome");
+        assert_eq!(text_at(&buffer, name_x, y, 4), "HOME");
+        assert_eq!(text_at(&buffer, value_x, y, 9), "/tmp/fake");
+        assert_eq!(text_at(&buffer, icon_x + 1, y, 1), ICON);
+        assert_eq!(text_at(&buffer, value_x, y - 1, 6), "abcde…");
     }
 
     #[test]
@@ -387,7 +382,7 @@ mod tests {
             " get-env · 1 variáveis · filtro: fake "
         );
         assert_eq!(title(&App::new(vars(), "")), " get-env · 2 variáveis ");
-        let buffer = draw(IconPos::End, &App::new(vars(), ""), W, H);
+        let buffer = draw(&App::new(vars(), ""), W, H);
         let top = row_text(&buffer, 0);
         assert!(top.starts_with('╭'), "{top}");
         assert!(top.contains("get-env · 2 variáveis"), "{top}");
@@ -396,7 +391,7 @@ mod tests {
     #[test]
     fn zebra_on_odd_rows_only() {
         let table = table_area(W, H);
-        let buffer = draw(IconPos::End, &App::new(vars(), ""), W, H);
+        let buffer = draw(&App::new(vars(), ""), W, H);
         assert_eq!(
             buffer[(table.x, table.y + 2)].bg,
             Color::Rgb(0x31, 0x32, 0x44)
@@ -410,17 +405,19 @@ mod tests {
     #[test]
     fn matched_letters_are_underlined() {
         let table = table_area(W, H);
-        let buffer = draw(IconPos::End, &App::new(vars(), "tok"), W, H);
+        let buffer = draw(&App::new(vars(), "tok"), W, H);
+        let geometry = Geometry::new(table.width, 10);
+        let name_x = table.x + column_of(&geometry, 0, Cell::Name);
         let y = table.y + 1;
         for x in 5..8 {
             assert!(
-                buffer[(table.x + x, y)]
+                buffer[(name_x + x, y)]
                     .modifier
                     .contains(Modifier::UNDERLINED),
                 "{x}"
             );
         }
-        assert!(!buffer[(table.x, y)].modifier.contains(Modifier::UNDERLINED));
+        assert!(!buffer[(name_x, y)].modifier.contains(Modifier::UNDERLINED));
     }
 
     #[test]
@@ -428,8 +425,8 @@ mod tests {
         let table = table_area(W, H);
         let mut app = App::new(vars(), "");
         app.selected = 1;
-        let buffer = draw(IconPos::End, &app, W, H);
-        let geometry = Geometry::new(table.width, 10, IconPos::End);
+        let buffer = draw(&app, W, H);
+        let geometry = Geometry::new(table.width, 10);
         let x = table.x + column_of(&geometry, 0, Cell::Value);
         let y = table.y + 1;
         assert_eq!(text_at(&buffer, x, y, 6), "abcde…");
@@ -440,7 +437,7 @@ mod tests {
     #[test]
     fn zero_matches_shows_error_row() {
         let table = table_area(W, H);
-        let buffer = draw(IconPos::End, &App::new(vars(), "zzz"), W, H);
+        let buffer = draw(&App::new(vars(), "zzz"), W, H);
         let row = row_text(&buffer, table.y + 1);
         assert!(row.contains("❌ nenhuma variável casa com zzz"), "{row}");
     }
@@ -450,7 +447,7 @@ mod tests {
         // As 5 pastilhas ocupam ~53 colunas; em 40 o rodapé é cortado.
         const WIDE: u16 = 60;
         let footer_y = areas(Rect::new(0, 0, WIDE, H)).footer.y;
-        let buffer = draw(IconPos::End, &App::new(vars(), ""), WIDE, H);
+        let buffer = draw(&App::new(vars(), ""), WIDE, H);
         let footer = row_text(&buffer, footer_y);
         for part in ["⏎", "linha", "/", "buscar", "q", "sair"] {
             assert!(footer.contains(part), "{part}: {footer}");
@@ -458,25 +455,25 @@ mod tests {
 
         let mut app = App::new(vars(), "");
         app.status = Some(Status::Ok("copiado: valor de HOME".into()));
-        let footer = row_text(&draw(IconPos::End, &app, WIDE, H), footer_y);
+        let footer = row_text(&draw(&app, WIDE, H), footer_y);
         assert!(footer.contains("✅ copiado: valor de HOME"), "{footer}");
 
         let mut app = App::new(vars(), "ho");
         app.searching = true;
-        let footer = row_text(&draw(IconPos::End, &app, WIDE, H), footer_y);
+        let footer = row_text(&draw(&app, WIDE, H), footer_y);
         assert!(footer.contains("/ ho▌"), "{footer}");
         assert!(footer.contains("Esc limpa"), "{footer}");
 
         // Cópia pelo mouse durante a busca: o status aparece mesmo assim.
         app.status = Some(Status::Err("erro ao copiar: saiu com 3".into()));
-        let footer = row_text(&draw(IconPos::End, &app, WIDE, H), footer_y);
+        let footer = row_text(&draw(&app, WIDE, H), footer_y);
         assert!(footer.contains("❌ erro ao copiar: saiu com 3"), "{footer}");
     }
 
     #[test]
     fn narrow_terminal_draws_without_panic() {
         for w in 0..14 {
-            draw(IconPos::End, &App::new(vars(), ""), w, 6);
+            draw(&App::new(vars(), ""), w, 6);
         }
     }
 }
