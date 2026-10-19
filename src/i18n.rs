@@ -107,7 +107,193 @@ pub fn lang() -> Lang {
     *LANG.get_or_init(detect)
 }
 
+/// Como as linhas de uma seção da ajuda são pintadas.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum RowKind {
+    Plain,
+    Keys,
+    Examples,
+}
+
+/// Seção da ajuda: título e linhas `(esquerda, direita)`.
+pub struct Section {
+    pub title: &'static str,
+    pub kind: RowKind,
+    pub rows: &'static [(&'static str, &'static str)],
+}
+
+pub struct HelpDoc {
+    pub tagline: &'static str,
+    pub sections: &'static [Section],
+}
+
+static HELP_PT: HelpDoc = HelpDoc {
+    tagline: "acha variáveis de ambiente pelo nome aproximado",
+    sections: &[
+        Section {
+            title: "USO",
+            kind: RowKind::Plain,
+            rows: &[
+                ("get-env [nome] [-f|--file <arquivo.env>]", ""),
+                ("get-env -h|--help", ""),
+            ],
+        },
+        Section {
+            title: "ARGUMENTOS",
+            kind: RowKind::Plain,
+            rows: &[
+                ("nome", "parte do nome; aceita letras salteadas"),
+                (
+                    "-f, --file <arq>",
+                    "lê as variáveis do arquivo .env, não do ambiente",
+                ),
+                ("-h, --help", "mostra esta ajuda"),
+            ],
+        },
+        Section {
+            title: "COMPORTAMENTO",
+            kind: RowKind::Plain,
+            rows: &[
+                ("1 resultado", "mostra o cartão e copia o valor"),
+                (
+                    "vários ou sem nome",
+                    "abre a tabela interativa, filtrada pelo nome",
+                ),
+                ("em pipe", "imprime NOME=valor mascarado, sem copiar"),
+            ],
+        },
+        Section {
+            title: "EXEMPLOS",
+            kind: RowKind::Examples,
+            rows: &[
+                ("get-env openai_key", "acha OPENAI_API_KEY e copia o valor"),
+                ("get-env -f .env db", "procura só no .env"),
+                ("get-env | grep AWS", "lista mascarada para outro comando"),
+            ],
+        },
+        Section {
+            title: "TABELA",
+            kind: RowKind::Keys,
+            rows: &[
+                ("↑ ↓", "move a seleção"),
+                ("⏎", "copia NOME='valor'"),
+                ("n", "copia o nome"),
+                ("v", "copia o valor"),
+                ("/", "busca; Esc limpa a busca"),
+                ("Esc", "limpa o filtro ou sai"),
+                ("q", "sai"),
+                ("⧉", "clique copia a linha"),
+                ("2× clique", "no nome ou no valor copia o que foi clicado"),
+            ],
+        },
+        Section {
+            title: "VARIÁVEIS",
+            kind: RowKind::Plain,
+            rows: &[
+                (
+                    "GET_ENV_LANG",
+                    "pt ou en; senão LC_ALL, LC_MESSAGES, LANG, macOS",
+                ),
+                (
+                    "GET_ENV_THEME",
+                    "dark, light ou ansi; senão o tema do macOS",
+                ),
+                (
+                    "GET_ENV_CLIP_CMD",
+                    "recebe a cópia no stdin (padrão: pbcopy)",
+                ),
+                ("NO_COLOR", "desliga as cores"),
+            ],
+        },
+    ],
+};
+
+static HELP_EN: HelpDoc = HelpDoc {
+    tagline: "finds environment variables by approximate name",
+    sections: &[
+        Section {
+            title: "USAGE",
+            kind: RowKind::Plain,
+            rows: &[
+                ("get-env [name] [-f|--file <file.env>]", ""),
+                ("get-env -h|--help", ""),
+            ],
+        },
+        Section {
+            title: "ARGUMENTS",
+            kind: RowKind::Plain,
+            rows: &[
+                ("name", "part of the name; letters may be skipped"),
+                (
+                    "-f, --file <file>",
+                    "reads the .env file instead of the environment",
+                ),
+                ("-h, --help", "shows this help"),
+            ],
+        },
+        Section {
+            title: "BEHAVIOR",
+            kind: RowKind::Plain,
+            rows: &[
+                ("1 match", "shows the card and copies the value"),
+                (
+                    "many or no name",
+                    "opens the interactive table, filtered by name",
+                ),
+                ("piped", "prints NAME=value masked, copies nothing"),
+            ],
+        },
+        Section {
+            title: "EXAMPLES",
+            kind: RowKind::Examples,
+            rows: &[
+                (
+                    "get-env openai_key",
+                    "finds OPENAI_API_KEY and copies the value",
+                ),
+                ("get-env -f .env db", "searches only the .env"),
+                ("get-env | grep AWS", "masked list for another command"),
+            ],
+        },
+        Section {
+            title: "TABLE",
+            kind: RowKind::Keys,
+            rows: &[
+                ("↑ ↓", "moves the selection"),
+                ("⏎", "copies NAME='value'"),
+                ("n", "copies the name"),
+                ("v", "copies the value"),
+                ("/", "search; Esc clears the search"),
+                ("Esc", "clears the filter or quits"),
+                ("q", "quits"),
+                ("⧉", "click copies the line"),
+                ("2× click", "on the name or value copies what was clicked"),
+            ],
+        },
+        Section {
+            title: "VARIABLES",
+            kind: RowKind::Plain,
+            rows: &[
+                (
+                    "GET_ENV_LANG",
+                    "pt or en; else LC_ALL, LC_MESSAGES, LANG, macOS",
+                ),
+                ("GET_ENV_THEME", "dark, light or ansi; else the macOS theme"),
+                (
+                    "GET_ENV_CLIP_CMD",
+                    "receives the copy on stdin (default: pbcopy)",
+                ),
+                ("NO_COLOR", "turns colors off"),
+            ],
+        },
+    ],
+};
+
 impl Lang {
+    pub fn help(self) -> &'static HelpDoc {
+        self.pick(&HELP_PT, &HELP_EN)
+    }
+
     fn pick<T>(self, pt: T, en: T) -> T {
         match self {
             Lang::Pt => pt,

@@ -29,6 +29,11 @@ pub fn parse(args: impl IntoIterator<Item = String>) -> Result<Args, String> {
     })
 }
 
+/// `-h` ou `--help` em qualquer posição: a ajuda vence qualquer erro de uso.
+pub fn wants_help(args: &[String]) -> bool {
+    args.iter().any(|a| a == "-h" || a == "--help")
+}
+
 fn usage() -> String {
     lang().usage().to_string()
 }
@@ -70,6 +75,24 @@ mod tests {
         });
         assert_eq!(p(&[]), expected);
         assert_eq!(p(&[""]), expected);
+    }
+
+    #[test]
+    fn help_flag_anywhere() {
+        let help =
+            |args: &[&str]| wants_help(&args.iter().map(|a| a.to_string()).collect::<Vec<_>>());
+        for args in [
+            &["-h"][..],
+            &["--help"],
+            &["--bogus", "-h"],
+            &["a", "b", "--help"],
+            &["-f", "-h"],
+        ] {
+            assert!(help(args), "{args:?}");
+        }
+        for args in [&["help"][..], &["-f", "x.env"], &[]] {
+            assert!(!help(args), "{args:?}");
+        }
     }
 
     #[test]

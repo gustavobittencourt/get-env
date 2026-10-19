@@ -4,7 +4,7 @@
 use ratatui::style::{Modifier, Style};
 
 use crate::format::{display_value, fit, is_sensitive, width, wrap};
-use crate::i18n::lang;
+use crate::i18n::{HelpDoc, RowKind, lang};
 use crate::theme::{Palette, paint};
 
 /// Rodapé do cartão: o resultado da cópia.
@@ -106,6 +106,58 @@ pub fn error_line(text: &str, emphasis: &str, palette: Option<&Palette>) -> Stri
     line
 }
 
+/// Texto do `--help`; com paleta, cada papel na sua cor.
+pub fn help(doc: &HelpDoc, palette: Option<&Palette>) -> String {
+    let style = |text: &str, role: fn(&Palette) -> Style| match palette {
+        Some(p) => paint(text, role(p)),
+        None => text.to_string(),
+    };
+    let cell = |kind: RowKind, left: &str| match kind {
+        RowKind::Keys => format!(" {left} "),
+        _ => left.to_string(),
+    };
+    // Linhas sem descrição (as de uso) não alargam a coluna da esquerda.
+    let column = doc
+        .sections
+        .iter()
+        .flat_map(|s| {
+            s.rows
+                .iter()
+                .filter(|(_, right)| !right.is_empty())
+                .map(|(left, _)| width(&cell(s.kind, left)))
+        })
+        .max()
+        .unwrap_or(0)
+        + 2;
+
+    let mut out = format!(
+        "{} — {}\n",
+        style("get-env", |p| p.title),
+        style(doc.tagline, |p| p.value)
+    );
+    for section in doc.sections {
+        out += &format!("\n{}\n", style(section.title, |p| p.header));
+        for (left, right) in section.rows {
+            let left = cell(section.kind, left);
+            let left_role: fn(&Palette) -> Style = match section.kind {
+                RowKind::Keys => |p| p.key,
+                _ => |p| p.name,
+            };
+            out += &format!("  {}", style(&left, left_role));
+            if !right.is_empty() {
+                let right_role: fn(&Palette) -> Style = match section.kind {
+                    RowKind::Examples => |p| p.secondary,
+                    _ => |p| p.value,
+                };
+                out += &" ".repeat(column - width(&left));
+                out += &style(right, right_role);
+            }
+            out += "\n";
+        }
+    }
+    out
+}
+
 /// Linha de uso; com paleta, o nome do comando em negrito.
 pub fn usage_line(usage: &str, palette: Option<&Palette>) -> String {
     match palette {
@@ -118,6 +170,7 @@ pub fn usage_line(usage: &str, palette: Option<&Palette>) -> String {
 mod tests {
     use super::*;
     use crate::format::width;
+    use crate::i18n::Lang;
     use crate::theme::{Palette, Theme};
 
     /// Tira as sequências `\x1b[…m`.
@@ -206,6 +259,34 @@ mod tests {
         let dark = Palette::of(Theme::Dark);
         assert_eq!(strip(&error_line("x ", "y", Some(&dark))), "❌ x y");
         assert!(error_line("x ", "y", Some(&dark)).contains("\x1b[1;38;2;243;139;168my"));
+    }
+
+    #[test]
+    fn help_fits_72_columns() {
+        for lang in [Lang::Pt, Lang::En] {
+            let doc = lang.help();
+            let text = help(doc, None);
+            for line in text.lines() {
+                assert!(width(line) <= 72, "{lang:?} {}: {line}", width(line));
+            }
+            assert!(text.contains(doc.tagline), "{lang:?}");
+            for section in doc.sections {
+                assert!(text.contains(section.title), "{}", section.title);
+                for (left, right) in section.rows {
+                    assert!(text.contains(left) && text.contains(right), "{left}");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn help_plain_has_no_escapes_and_colored_has() {
+        let plain = help(Lang::Pt.help(), None);
+        assert!(!plain.contains('\x1b'), "{plain}");
+        assert!(plain.starts_with("get-env — acha variáveis"), "{plain}");
+        let colored = help(Lang::Pt.help(), Some(&Palette::of(Theme::Dark)));
+        assert!(colored.contains("\x1b["), "{colored}");
+        assert_eq!(strip(&colored), plain);
     }
 
     #[test]

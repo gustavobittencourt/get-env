@@ -22,7 +22,19 @@ fn main() -> ExitCode {
     // O tema só é detectado quando alguma saída vai mesmo ser colorida.
     let theme = OnceCell::new();
 
-    let args = match cli::parse(std::env::args().skip(1)) {
+    let argv: Vec<String> = std::env::args().skip(1).collect();
+    if cli::wants_help(&argv) {
+        let palette = std::io::stdout().is_terminal().then(|| palette(&theme));
+        // Pipe fechado (`get-env -h | head -1`) não é erro.
+        let _ = write!(
+            std::io::stdout(),
+            "{}",
+            output::help(lang().help(), palette.as_ref())
+        );
+        return ExitCode::SUCCESS;
+    }
+
+    let args = match cli::parse(argv) {
         Ok(args) => args,
         Err(usage) => {
             eprintln!(

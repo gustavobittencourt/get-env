@@ -263,6 +263,70 @@ fn english_card_tty() {
 }
 
 #[test]
+fn help_pipe_pt() {
+    let (out, err, rc) = run(&["--help"], &[("GET_ENV_THEME", "dark")]);
+    assert_eq!(rc, 0);
+    assert_eq!(err, "");
+    assert!(out.starts_with("get-env — acha variáveis"), "{out:?}");
+    assert!(
+        out.contains("USO") && out.contains("GET_ENV_LANG"),
+        "{out:?}"
+    );
+}
+
+#[test]
+fn help_pipe_has_no_escapes() {
+    let (out, _, _) = run(&["--help"], &[("GET_ENV_THEME", "dark")]);
+    assert!(!out.contains('\x1b'), "{out:?}");
+}
+
+#[test]
+fn help_english() {
+    let (out, _, rc) = run(&["-h"], &[("GET_ENV_LANG", "en")]);
+    assert_eq!(rc, 0);
+    assert!(out.contains("USAGE"), "{out:?}");
+    assert!(out.contains("finds environment variables"), "{out:?}");
+}
+
+#[test]
+fn help_wins_over_bad_args() {
+    for args in [&["--bogus", "-h"][..], &["a", "b", "--help"], &["-f", "-h"]] {
+        let (out, _, rc) = run(args, &[]);
+        assert_eq!(rc, 0, "{args:?}");
+        assert!(out.contains("USO"), "{args:?}: {out:?}");
+    }
+}
+
+#[test]
+fn help_tty_is_colored() {
+    let clip = temp_path("help-tty");
+    let (out, rc) = run_tty(&["--help"], &[("GET_ENV_THEME", "dark")], &clip_into(&clip));
+    assert_eq!(rc, 0);
+    assert!(out.contains("\x1b[38;2;"), "{out:?}");
+    assert!(strip(&out).contains("TABELA"), "{out:?}");
+    assert!(!clip.exists());
+}
+
+#[test]
+fn help_closed_pipe_exits_cleanly() {
+    let mut child = Command::new(BIN)
+        .arg("--help")
+        .env_clear()
+        .env("PATH", "/usr/bin:/bin")
+        .env("GET_ENV_LANG", "pt")
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    drop(child.stdout.take());
+    let out = child.wait_with_output().unwrap();
+    let err = String::from_utf8(out.stderr).unwrap();
+    assert!(!err.contains("panicked"), "{err}");
+    assert_eq!(out.status.code(), Some(0));
+}
+
+#[test]
 fn closed_pipe_exits_cleanly() {
     let vars: Vec<(String, String)> = (0..3000)
         .map(|i| (format!("VAR_{i:05}"), "x".repeat(40)))
