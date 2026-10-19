@@ -2,6 +2,8 @@ mod cli;
 mod clipboard;
 mod format;
 mod matching;
+#[expect(dead_code)]
+mod theme;
 mod tui;
 mod vars;
 
