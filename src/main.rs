@@ -3,7 +3,6 @@ mod clipboard;
 mod format;
 mod matching;
 mod output;
-#[expect(dead_code)]
 mod theme;
 mod tui;
 mod vars;
@@ -42,13 +41,13 @@ fn main() -> ExitCode {
 
     let found = match &args.query {
         Some(query) => {
-            let found = select(query, all);
+            let found = select(query, &all);
             if found.is_empty() {
                 return report(&theme, "nenhuma variável casa com ", query);
             }
             found
         }
-        None => all,
+        None => all.clone(),
     };
 
     let tty = std::io::stdout().is_terminal();
@@ -78,7 +77,9 @@ fn main() -> ExitCode {
     }
 
     if tty {
-        if let Err(e) = tui::run(found) {
+        // A tabela recebe tudo; a query vira o filtro inicial da busca.
+        let filter = args.query.as_deref().unwrap_or("");
+        if let Err(e) = tui::run(all, filter, palette(&theme)) {
             return report(&theme, &format!("erro na tabela: {e}"), "");
         }
     } else if let Some(code) = print_masked(&found) {
@@ -124,16 +125,10 @@ fn print_masked(vars: &[Var]) -> Option<ExitCode> {
 }
 
 /// Variáveis cujo nome casa com `query`, na ordem do `matching::find`.
-fn select(query: &str, all: Vec<Var>) -> Vec<Var> {
+fn select(query: &str, all: &[Var]) -> Vec<Var> {
     let names: Vec<&str> = all.iter().map(|v| v.name.as_str()).collect();
-    let order: Vec<String> = matching::find(query, &names)
+    matching::find(query, &names)
         .into_iter()
-        .map(str::to_string)
-        .collect();
-    let mut found: Vec<Var> = all
-        .into_iter()
-        .filter(|v| order.contains(&v.name))
-        .collect();
-    found.sort_by_key(|v| order.iter().position(|n| *n == v.name));
-    found
+        .filter_map(|name| all.iter().find(|v| v.name == name).cloned())
+        .collect()
 }

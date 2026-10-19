@@ -39,7 +39,6 @@ pub fn find<'a>(query: &str, names: &[&'a str]) -> Vec<&'a str> {
 
 /// Índices, em caracteres de `name`, das letras a destacar para `query`: a
 /// primeira ocorrência da substring; senão as letras da menor janela.
-#[cfg_attr(not(test), expect(dead_code))]
 pub fn highlight(query: &str, name: &str) -> Vec<usize> {
     let query = lower_chars(query);
     let name = lower_chars(name);
