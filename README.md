@@ -33,6 +33,7 @@ $ get-env                 # tudo, na tabela
 - 🎨 **Cores que combinam com o sistema.** Catppuccin Mocha no tema escuro do macOS, Latte no claro, as 16 cores do terminal quando não dá para saber, nenhuma com `NO_COLOR`.
 - 🧰 **Bom em pipe.** Fora de um terminal imprime `NOME=valor` mascarado, sem cor e sem copiar nada.
 - 📄 **Lê arquivos `.env`.** `get-env -f .env db` procura só no arquivo.
+- 🌐 **Fala o seu idioma.** Português ou inglês, conforme o locale e o idioma do macOS; `get-env --help` explica tudo.
 
 <p align="center">
   <img src="assets/card.png" alt="Cartão do get-env com OPENAI_API_KEY mascarada e a confirmação de cópia" width="600">
@@ -52,6 +53,7 @@ O binário vai para `~/.cargo/bin/get-env`.
 
 ```text
 get-env [nome] [--file|-f <arquivo.env>]
+get-env -h|--help
 ```
 
 | situação | o que acontece |
@@ -60,6 +62,7 @@ get-env [nome] [--file|-f <arquivo.env>]
 | **vários** resultados, ou sem `nome`, no terminal | abre a tabela, com o `nome` como filtro inicial |
 | saída em pipe ou arquivo | imprime `NOME=valor` mascarado, uma por linha, sem copiar |
 | `-f arquivo.env` | troca o ambiente pelas variáveis do arquivo |
+| `-h` ou `--help` | mostra a ajuda colorida, em qualquer posição |
 
 ### Como a busca escolhe
 
@@ -101,12 +104,13 @@ Caracteres de controle (`\n`, `\t`, `ESC`…) aparecem escapados, então um valo
 |---|---|
 | `0` | deu certo |
 | `1` | nenhuma variável casou, o arquivo não abriu ou a cópia falhou |
-| `2` | argumentos inválidos |
+| `2` | argumentos inválidos (`-h` e `--help` saem com `0`) |
 
 ## ⚙️ Configuração
 
 | variável | efeito |
 |---|---|
+| `GET_ENV_LANG` | `pt` ou `en` forçam o idioma; sem ela, valem `LC_ALL`, `LC_MESSAGES`, `LANG` e o idioma do macOS, nessa ordem, com inglês como padrão |
 | `GET_ENV_THEME` | `dark`, `light` ou `ansi` forçam a paleta; sem ela, vale o tema do macOS |
 | `NO_COLOR` | qualquer valor não vazio desliga as cores ([no-color.org](https://no-color.org)) |
 | `GET_ENV_CLIP_CMD` | comando que recebe a cópia no stdin; o padrão é `pbcopy` |
