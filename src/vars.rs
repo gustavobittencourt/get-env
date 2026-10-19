@@ -10,7 +10,9 @@ pub struct Var {
 }
 
 /// Faz `source` do arquivo e imprime `nome\0valor\0` de cada nome pedido.
-const SOURCE_SCRIPT: &str = r#"set -a; source "$1" >/dev/null; set +a; shift; for n in "$@"; do printf "%s\0%s\0" "$n" "${(P)n}"; done"#;
+/// O valor é cortado no primeiro NUL, como no ambiente real; sem o corte,
+/// um NUL desalinharia os pares e um valor sairia no lugar do nome.
+const SOURCE_SCRIPT: &str = r#"set -a; source "$1" >/dev/null; set +a; shift; for n in "$@"; do printf "%s\0%s\0" "$n" "${${(P)n}%%$'\0'*}"; done"#;
 
 /// Converte pares do ambiente (não UTF-8 vira U+FFFD) e ordena por nome.
 pub fn from_pairs(pairs: impl IntoIterator<Item = (OsString, OsString)>) -> Vec<Var> {
@@ -169,6 +171,26 @@ mod tests {
         let result = from_file(&path);
         std::fs::remove_file(&path).unwrap();
         assert_eq!(result, Ok(vec![var("FAKE_TOKEN", "abc")]));
+    }
+
+    /// Byte nulo num valor não pode desalinhar os pares nome/valor (um
+    /// segredo sairia no lugar do nome, sem máscara). No ambiente real o
+    /// valor termina no NUL, e é assim que ele volta.
+    #[test]
+    fn from_file_value_with_nul_keeps_pairs_aligned() {
+        let path = temp_file(
+            "zsh-nul",
+            "FAKE_NOTE=$'abc\\0xyz'\nFAKE_API_KEY=sk-fakesecret999\n",
+        );
+        let result = from_file(&path);
+        std::fs::remove_file(&path).unwrap();
+        assert_eq!(
+            result,
+            Ok(vec![
+                var("FAKE_API_KEY", "sk-fakesecret999"),
+                var("FAKE_NOTE", "abc"),
+            ])
+        );
     }
 
     #[test]

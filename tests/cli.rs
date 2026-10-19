@@ -110,10 +110,12 @@ fn pipe_output_has_no_escapes() {
         ("FAKE_TOKEN", "abcdefgh"),
         ("OPENAI_API_KEY", "sk-123456"),
         ("OPENAI_ORG", "org1"),
+        ("FAKE_MSG", "a\x1b]0;PWNED\x07\x1b[31mred"),
         theme,
     ];
-    let cases: [&[&str]; 5] = [
+    let cases: [&[&str]; 6] = [
         &["fake_tok"],
+        &["fake_msg"],
         &["openai"],
         &["zzz"],
         &["-f", "/nao/existe.env"],

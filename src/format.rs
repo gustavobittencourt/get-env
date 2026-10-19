@@ -11,7 +11,7 @@ pub fn is_sensitive(name: &str) -> bool {
 }
 
 /// Valor como aparece no terminal: mascarado se o nome é sensível e com
-/// quebras de linha escapadas.
+/// todo caractere de controle escapado (`\n`, `\r`, `\t`, `\x1b`…).
 pub fn display_value(name: &str, value: &str) -> String {
     let shown = if !is_sensitive(name) {
         value.to_string()
@@ -21,7 +21,17 @@ pub fn display_value(name: &str, value: &str) -> String {
         let head: String = value.chars().take(VISIBLE_CHARS).collect();
         format!("{head}…")
     };
-    shown.replace('\n', "\\n").replace('\r', "\\r")
+    let mut out = String::with_capacity(shown.len());
+    for c in shown.chars() {
+        match c {
+            '\n' => out.push_str("\\n"),
+            '\r' => out.push_str("\\r"),
+            '\t' => out.push_str("\\t"),
+            c if c.is_control() => out.push_str(&format!("\\x{:02x}", u32::from(c))),
+            c => out.push(c),
+        }
+    }
+    out
 }
 
 /// Colunas que o texto ocupa no terminal (emoji e CJK ocupam 2).
@@ -125,6 +135,16 @@ mod tests {
     #[test]
     fn escapes_newlines() {
         assert_eq!(display_value("MSG", "a\nb\r"), "a\\nb\\r");
+    }
+
+    /// Escape de terminal num valor não pode mudar cor, título da janela
+    /// nem o prompt: todo caractere de controle sai escapado na tela.
+    #[test]
+    fn escapes_control_chars() {
+        assert_eq!(
+            display_value("MSG", "a\u{1b}]0;X\u{7}\tb\u{9b}c\u{7f}"),
+            "a\\x1b]0;X\\x07\\tb\\x9bc\\x7f"
+        );
     }
 
     #[test]
