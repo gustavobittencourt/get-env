@@ -1,5 +1,7 @@
 //! Como nomes e valores aparecem no terminal e no clipboard.
 
+use unicode_width::UnicodeWidthChar;
+
 const SENSITIVE_PARTS: [&str; 4] = ["TOKEN", "KEY", "SECRET", "PASS"];
 const VISIBLE_CHARS: usize = 5;
 
@@ -20,6 +22,52 @@ pub fn display_value(name: &str, value: &str) -> String {
         format!("{head}…")
     };
     shown.replace('\n', "\\n").replace('\r', "\\r")
+}
+
+/// Colunas que o texto ocupa no terminal (emoji e CJK ocupam 2).
+pub fn width(text: &str) -> usize {
+    text.chars().map(|c| c.width().unwrap_or(0)).sum()
+}
+
+/// Corta `text` em `width` colunas, terminando em `…` quando não cabe.
+pub fn fit(text: &str, width: usize) -> String {
+    if self::width(text) <= width {
+        return text.to_string();
+    }
+    if width == 0 {
+        return String::new();
+    }
+    let mut used = 0;
+    let mut head = String::new();
+    for c in text.chars() {
+        let w = c.width().unwrap_or(0);
+        if used + w > width - 1 {
+            break;
+        }
+        used += w;
+        head.push(c);
+    }
+    format!("{head}…")
+}
+
+/// Quebra `text` em pedaços de até `width` colunas, sem partir caractere.
+#[cfg_attr(not(test), expect(dead_code))]
+pub fn wrap(text: &str, width: usize) -> Vec<String> {
+    if width == 0 {
+        return vec![text.to_string()];
+    }
+    let mut lines = vec![String::new()];
+    let mut used = 0;
+    for c in text.chars() {
+        let w = c.width().unwrap_or(0);
+        if used + w > width && used > 0 {
+            lines.push(String::new());
+            used = 0;
+        }
+        lines.last_mut().expect("nunca vazio").push(c);
+        used += w;
+    }
+    lines
 }
 
 pub fn masked_line(name: &str, value: &str) -> String {
@@ -108,5 +156,28 @@ mod tests {
     #[test]
     fn shell_line_never_masks() {
         assert_eq!(shell_line("FAKE_TOKEN", "abcdefgh"), "FAKE_TOKEN=abcdefgh");
+    }
+
+    #[test]
+    fn width_counts_wide_chars() {
+        assert_eq!(width("abc"), 3);
+        assert_eq!(width("🔒 x"), 4);
+        assert_eq!(width("✅"), 2);
+    }
+
+    #[test]
+    fn fit_by_display_width() {
+        assert_eq!(fit("abcdef", 4), "abc…");
+        assert_eq!(fit("abc", 4), "abc");
+        assert_eq!(fit("abc", 0), "");
+        assert_eq!(fit("ab🔒cd", 4), "ab…");
+        assert_eq!(fit("日本語テキスト", 6), "日本…");
+    }
+
+    #[test]
+    fn wrap_never_splits_wide_char() {
+        assert_eq!(wrap("abcdefg", 3), vec!["abc", "def", "g"]);
+        assert_eq!(wrap("a日本", 2), vec!["a", "日", "本"]);
+        assert_eq!(wrap("", 5), vec![""]);
     }
 }

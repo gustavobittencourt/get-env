@@ -23,11 +23,11 @@ use ratatui::widgets::{HighlightSpacing, Paragraph, Row, Table, TableState};
 use ratatui::{Frame, Terminal};
 
 use crate::clipboard;
-use crate::format::display_value;
+use crate::format::{display_value, fit, width};
 use crate::vars::Var;
 use app::{Action, App};
 use click::ClickTracker;
-use geometry::{Cell, Geometry, IconPos, fit};
+use geometry::{Cell, Geometry, IconPos};
 
 const DOUBLE_CLICK: Duration = Duration::from_millis(400);
 const ICON: &str = "⧉";
@@ -43,7 +43,7 @@ pub fn run(vars: Vec<Var>) -> io::Result<()> {
     };
     let name_width = vars
         .iter()
-        .map(|v| v.name.chars().count())
+        .map(|v| width(&v.name))
         .max()
         .unwrap_or(0)
         .max("NOME".len());

@@ -26,38 +26,61 @@ pub fn find<'a>(query: &str, names: &[&'a str]) -> Vec<&'a str> {
         return substring;
     }
 
-    let query_chars: Vec<char> = q.chars().collect();
+    let query_chars = lower_chars(&q);
     let mut by_window: Vec<(usize, &str)> = sorted
         .iter()
-        .filter_map(|n| shortest_window(&n.to_lowercase(), &query_chars).map(|w| (w, *n)))
+        .filter_map(|n| {
+            best_window(&lower_chars(n), &query_chars).map(|p| (p[p.len() - 1] - p[0] + 1, *n))
+        })
         .collect();
     by_window.sort();
     by_window.into_iter().map(|(_, n)| n).collect()
 }
 
-/// Menor janela, em caracteres, de `name` que contém `query` como
-/// subsequência; `None` se não contém.
-fn shortest_window(name: &str, query: &[char]) -> Option<usize> {
-    let chars: Vec<char> = name.chars().collect();
+/// Índices, em caracteres de `name`, das letras a destacar para `query`: a
+/// primeira ocorrência da substring; senão as letras da menor janela.
+#[cfg_attr(not(test), expect(dead_code))]
+pub fn highlight(query: &str, name: &str) -> Vec<usize> {
+    let query = lower_chars(query);
+    let name = lower_chars(name);
+    if query.is_empty() {
+        return Vec::new();
+    }
+    if let Some(start) = name
+        .windows(query.len())
+        .position(|w| w == query.as_slice())
+    {
+        return (start..start + query.len()).collect();
+    }
+    best_window(&name, &query).unwrap_or_default()
+}
+
+/// Minúsculas caractere a caractere, sem mudar a contagem.
+fn lower_chars(text: &str) -> Vec<char> {
+    text.chars()
+        .map(|c| c.to_lowercase().next().unwrap_or(c))
+        .collect()
+}
+
+/// Posições das letras de `query` na menor janela de `name` que a contém
+/// como subsequência (a primeira, no empate); `None` se não contém.
+fn best_window(name: &[char], query: &[char]) -> Option<Vec<usize>> {
     let first = *query.first()?;
-    (0..chars.len())
-        .filter(|&start| chars[start] == first)
+    (0..name.len())
+        .filter(|&start| name[start] == first)
         .filter_map(|start| {
-            let mut next = 1;
-            if next == query.len() {
-                return Some(1);
-            }
-            for (i, &c) in chars.iter().enumerate().skip(start + 1) {
-                if c == query[next] {
-                    next += 1;
-                    if next == query.len() {
-                        return Some(i - start + 1);
-                    }
+            let mut positions = vec![start];
+            for (i, &c) in name.iter().enumerate().skip(start + 1) {
+                if positions.len() == query.len() {
+                    break;
+                }
+                if c == query[positions.len()] {
+                    positions.push(i);
                 }
             }
-            None
+            (positions.len() == query.len()).then_some(positions)
         })
-        .min()
+        .min_by_key(|p| p[p.len() - 1] - p[0])
 }
 
 #[cfg(test)]
@@ -108,5 +131,25 @@ mod tests {
     #[test]
     fn two_exact_names_differing_in_case() {
         assert_eq!(find("path", &["PATH", "path"]), vec!["PATH", "path"]);
+    }
+
+    #[test]
+    fn highlight_substring_first_occurrence() {
+        assert_eq!(highlight("open", "OPENAI_OPEN"), vec![0, 1, 2, 3]);
+        assert_eq!(highlight("AI", "openai"), vec![4, 5]);
+    }
+
+    #[test]
+    fn highlight_subsequence_uses_shortest_window() {
+        // "OPENAI_API_KEY" tem um só O (0) e um só K (11)
+        assert_eq!(highlight("ok", "OPENAI_API_KEY"), vec![0, 11]);
+        assert_eq!(highlight("ok", "OAK"), vec![0, 2]);
+        assert_eq!(highlight("ab", "a_x_a_b"), vec![4, 6]);
+    }
+
+    #[test]
+    fn highlight_empty_or_no_match() {
+        assert!(highlight("", "PATH").is_empty());
+        assert!(highlight("zz", "PATH").is_empty());
     }
 }

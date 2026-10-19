@@ -7,4 +7,5 @@ description = "Acha variáveis de ambiente por nome aproximado, copia para o cli
 
 [dependencies]
 ratatui = "0.30.2"
+unicode-width = "0.2.2"
 

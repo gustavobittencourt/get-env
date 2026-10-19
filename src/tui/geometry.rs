@@ -22,18 +22,6 @@ pub struct Geometry {
     pub value_width: u16,
 }
 
-/// Corta `text` em `width` caracteres, terminando em `…` quando não cabe.
-pub fn fit(text: &str, width: usize) -> String {
-    if text.chars().count() <= width {
-        return text.to_string();
-    }
-    if width == 0 {
-        return String::new();
-    }
-    let head: String = text.chars().take(width - 1).collect();
-    format!("{head}…")
-}
-
 const ICON_WIDTH: u16 = 3;
 const SPACING: u16 = 1;
 
@@ -93,13 +81,6 @@ impl Geometry {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn fit_cuts_with_ellipsis() {
-        assert_eq!(fit("abcdef", 4), "abc…");
-        assert_eq!(fit("abc", 4), "abc");
-        assert_eq!(fit("abc", 0), "");
-    }
 
     #[test]
     fn hit_with_icon_at_start() {
