@@ -28,7 +28,7 @@ $ get-env                 # tudo, na tabela
 
 - 🔎 **Busca aproximada, sem caixa.** `openai_key` ou só `oak` chegam em `OPENAI_API_KEY`.
 - 📋 **Copia direto.** Com um resultado só, o valor real vai para o clipboard e um cartão confirma.
-- 🔒 **Não vaza segredo na tela.** Nomes com `TOKEN`, `KEY`, `SECRET`, `PASS`, `CREDENTIAL`, `DATABASE_URL`, `JWT`, `DSN` ou a palavra `AUTH`, e valores com formato de credencial conhecida (chaves AWS, GitHub, Slack, OpenAI, Anthropic, Google, JWT, chave PEM, URL com senha; padrões do [gitleaks](https://github.com/gitleaks/gitleaks), ver [NOTICE](NOTICE)), aparecem mascarados (`demo-…`); o clipboard recebe o valor inteiro.
+- 🔒 **Não vaza segredo na tela.** Nomes com `TOKEN`, `KEY`, `SECRET`, `PASS`, `CREDENTIAL`, `DATABASE_URL`, `JWT`, `DSN` ou a palavra `AUTH`, e valores com formato de credencial conhecida (as 217 regras do [gitleaks](https://github.com/gitleaks/gitleaks) que valem fora de arquivo, de AWS e GitHub a Stripe e chave PEM, mais URL com senha; ver [NOTICE](NOTICE)), aparecem mascarados (`demo-…`); o clipboard recebe o valor inteiro.
 - ⏱️ **Clipboard que expira.** A cópia vai marcada como confidencial (`org.nspasteboard.ConcealedType`), para gerenciadores de clipboard não guardarem histórico, e é apagada em 60 s, só se ninguém copiou outra coisa nesse meio-tempo.
 - 🖱️ **Tabela interativa.** Teclado e mouse, busca ao vivo com `/`, um clique no `⧉` copia a linha pronta para colar no shell.
 - 🎨 **Cores que combinam com o sistema.** Catppuccin Mocha no tema escuro do macOS, Latte no claro, as 16 cores do terminal quando não dá para saber, nenhuma com `NO_COLOR`.
