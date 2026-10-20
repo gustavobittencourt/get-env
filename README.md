@@ -28,7 +28,8 @@ $ get-env                 # tudo, na tabela
 
 - 🔎 **Busca aproximada, sem caixa.** `openai_key` ou só `oak` chegam em `OPENAI_API_KEY`.
 - 📋 **Copia direto.** Com um resultado só, o valor real vai para o clipboard e um cartão confirma.
-- 🔒 **Não vaza segredo na tela.** Nomes com `TOKEN`, `KEY`, `SECRET` ou `PASS` aparecem mascarados (`demo-…`); o clipboard recebe o valor inteiro.
+- 🔒 **Não vaza segredo na tela.** Nomes com `TOKEN`, `KEY`, `SECRET`, `PASS`, `CREDENTIAL`, `DATABASE_URL`, `JWT`, `DSN` ou a palavra `AUTH`, e valores com formato de credencial conhecida (chaves AWS, GitHub, Slack, OpenAI, Anthropic, Google, JWT, chave PEM, URL com senha; padrões do [gitleaks](https://github.com/gitleaks/gitleaks), ver [NOTICE](NOTICE)), aparecem mascarados (`demo-…`); o clipboard recebe o valor inteiro.
+- ⏱️ **Clipboard que expira.** A cópia vai marcada como confidencial (`org.nspasteboard.ConcealedType`), para gerenciadores de clipboard não guardarem histórico, e é apagada em 60 s, só se ninguém copiou outra coisa nesse meio-tempo.
 - 🖱️ **Tabela interativa.** Teclado e mouse, busca ao vivo com `/`, um clique no `⧉` copia a linha pronta para colar no shell.
 - 🎨 **Cores que combinam com o sistema.** Catppuccin Mocha no tema escuro do macOS, Latte no claro, as 16 cores do terminal quando não dá para saber, nenhuma com `NO_COLOR`.
 - 🧰 **Bom em pipe.** Fora de um terminal imprime `NOME=valor` mascarado, sem cor e sem copiar nada.
@@ -52,7 +53,7 @@ O binário vai para `~/.cargo/bin/get-env`.
 ## 🚀 Uso
 
 ```text
-get-env [nome] [--file|-f <arquivo.env>]
+get-env [nome] [--file|-f <arquivo.env>] [--no-clear]
 get-env -h|--help
 ```
 
@@ -62,6 +63,7 @@ get-env -h|--help
 | **vários** resultados, ou sem `nome`, no terminal | abre a tabela, com o `nome` como filtro inicial |
 | saída em pipe ou arquivo | imprime `NOME=valor`, uma por linha, com os segredos mascarados e sem copiar |
 | `-f arquivo.env` | troca o ambiente pelas variáveis do arquivo |
+| `--no-clear` | não apaga o clipboard depois da cópia |
 | `-h` ou `--help` | mostra a ajuda colorida, em qualquer posição |
 
 ### Como a busca escolhe
@@ -116,7 +118,10 @@ Caracteres de controle (`\n`, `\t`, `ESC`…) aparecem escapados, então um valo
 | `GET_ENV_LANG` | `pt` ou `en` forçam o idioma; sem ela, valem `LC_ALL`, `LC_MESSAGES`, `LANG` e o idioma do macOS, nessa ordem, com inglês como padrão |
 | `GET_ENV_THEME` | `dark`, `light` ou `ansi` forçam a paleta; sem ela, vale o tema do macOS |
 | `NO_COLOR` | qualquer valor não vazio desliga as cores ([no-color.org](https://no-color.org)) |
-| `GET_ENV_CLIP_CMD` | comando que recebe a cópia no stdin; o padrão é `pbcopy` |
+| `GET_ENV_CLIP_CLEAR` | segundos até apagar a cópia (padrão `60`); `0` desliga |
+| `GET_ENV_CLIP_CMD` | comando que recebe a cópia no stdin, no lugar do pasteboard do macOS; sem marca de confidencial e sem limpeza automática |
+
+A limpeza fica a cargo de um processo destacado (o próprio `get-env` num modo oculto, em sessão nova), que recebe só o prazo e o `changeCount` do pasteboard, nunca o valor. Ao fim do prazo ele apaga o clipboard só se o `changeCount` ainda é o da cópia; se você copiou outra coisa, nada muda. A conferência e a limpeza não são atômicas: uma cópia sua feita exatamente entre as duas chamadas seria apagada.
 
 `GET_ENV_CLIP_CMD` permite usar o `get-env` fora do macOS, por exemplo com `wl-copy` ou `xclip -selection clipboard`. Isso não foi testado: o desenvolvimento e os testes são todos no macOS.
 
@@ -131,7 +136,7 @@ cargo clippy -- -D warnings
 cargo test
 ```
 
-Os testes rodam o binário com o ambiente zerado e só com variáveis falsas, e a cópia vai para um arquivo temporário via `GET_ENV_CLIP_CMD`. Nenhum teste lê o seu ambiente nem usa o clipboard de verdade.
+Os testes rodam o binário com o ambiente zerado e só com variáveis falsas, e a cópia vai para um arquivo temporário via `GET_ENV_CLIP_CMD` ou para um pasteboard com nome próprio (`GET_ENV_PASTEBOARD`, só para testes). Nenhum teste lê o seu ambiente nem toca no seu clipboard.
 
 A demo deste README é gravada com o [VHS](https://github.com/charmbracelet/vhs), também num ambiente só com valores falsos:
 
