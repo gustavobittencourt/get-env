@@ -1,10 +1,11 @@
 get-env
 Copyright (c) 2026 Gustavo Bittencourt (licença MIT, ver LICENSE)
 
-Este projeto inclui as expressões regulares de 12 regras de
-config/gitleaks.toml do gitleaks (https://github.com/gitleaks/gitleaks),
-commit b58d3f102cf3a2c84cb7f923d05c25c9b1aed84b, em src/secrets.rs.
-Elas são distribuídas sob a licença abaixo.
+Este projeto inclui, em src/secrets/rules.rs, as regras (regex, keywords,
+entropia e allowlists) de config/gitleaks.toml do gitleaks
+(https://github.com/gitleaks/gitleaks), commit
+b58d3f102cf3a2c84cb7f923d05c25c9b1aed84b, convertidas por
+scripts/gen_secret_rules.py. Elas são distribuídas sob a licença abaixo.
 
 MIT License
 

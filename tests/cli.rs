@@ -360,11 +360,29 @@ fn closed_pipe_exits_cleanly() {
 #[test]
 fn pipe_masks_secret_shaped_value() {
     let url = format!("postgres://app:{}@db.local/app", "hunter2");
-    let aws = format!("AK{}{}", "IA", "X".repeat(16));
+    let aws = format!("AK{}{}", "IA", "QWERTYUPZXCV2345");
     let (out, _, rc) = run(&[], &[("DB", url.as_str()), ("CLOUD_ID", aws.as_str())]);
     assert!(out.contains("DB=postg…\n"), "{out:?}");
-    assert!(out.contains("CLOUD_ID=AKIAX…\n"), "{out:?}");
+    assert!(out.contains("CLOUD_ID=AKIAQ…\n"), "{out:?}");
     assert!(!out.contains("hunter2"), "{out:?}");
+    assert_eq!(rc, 0);
+}
+
+/// Formatos que só o conjunto inteiro do gitleaks pega (Stripe e webhook
+/// do Slack), com nomes que nenhuma regra de nome cobre.
+#[test]
+fn pipe_masks_full_gitleaks_formats() {
+    let stripe = format!("sk_{}{}", "live_", "aB3dE5fG7hJ9kL1mN2pQ4rS6");
+    let webhook = format!(
+        "https://hooks.{}/services/{}",
+        "slack.com", "T0A1B2C3D/B4E5F6G7H/aB3dE5fG7hJ9kL1mN2pQ4rS6t"
+    );
+    let (out, _, rc) = run(
+        &[],
+        &[("BILLING", stripe.as_str()), ("ALERTS", webhook.as_str())],
+    );
+    assert!(out.contains("BILLING=sk_li…\n"), "{out:?}");
+    assert!(out.contains("ALERTS=https…\n"), "{out:?}");
     assert_eq!(rc, 0);
 }
 
