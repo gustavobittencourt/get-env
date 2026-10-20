@@ -53,7 +53,7 @@ fn keys() -> [(&'static str, &'static str); 6] {
 }
 
 /// Abre a tabela com todas as `vars` e `filter` como filtro inicial.
-pub fn run(vars: Vec<Var>, filter: &str, palette: Palette) -> io::Result<()> {
+pub fn run(vars: Vec<Var>, filter: &str, palette: Palette, clear: Option<u64>) -> io::Result<()> {
     if vars.is_empty() {
         return Ok(());
     }
@@ -112,7 +112,7 @@ pub fn run(vars: Vec<Var>, filter: &str, palette: Palette) -> io::Result<()> {
         match action {
             Action::Quit => return Ok(()),
             Action::Copy(kind) => {
-                app.status = Some(match clipboard::copy(&app.copy_text(kind)) {
+                app.status = Some(match clipboard::copy(&app.copy_text(kind), clear) {
                     Ok(()) => Status::Ok(app.copied_status(kind)),
                     Err(e) => Status::Err(lang().copy_failed(&e)),
                 });

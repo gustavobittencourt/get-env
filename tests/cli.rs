@@ -171,6 +171,14 @@ fn many_pipe_lists_masked() {
 #[test]
 fn no_query_pipe_lists_all_sorted() {
     let (out, _, rc) = run(&[], &[("B", "2"), ("A", "1")]);
+    // O CoreFoundation, que vem com o AppKit do pasteboard, cria
+    // `__CF_USER_TEXT_ENCODING` quando ela falta; num shell do macOS ela
+    // já existe, só o ambiente zerado do teste a vê nascer.
+    let out: String = out
+        .lines()
+        .filter(|l| !l.starts_with("__CF_USER_TEXT_ENCODING="))
+        .map(|l| format!("{l}\n"))
+        .collect();
     assert_eq!(out, "A=1\nB=2\nGET_ENV_LANG=pt\nPATH=/usr/bin:/bin\n");
     assert_eq!(rc, 0);
 }
@@ -345,4 +353,106 @@ fn closed_pipe_exits_cleanly() {
     let err = String::from_utf8(out.stderr).unwrap();
     assert!(!err.contains("panicked"), "{err}");
     assert_eq!(out.status.code(), Some(0));
+}
+
+/// Cópia pelo pasteboard nativo, num pasteboard com nome próprio para não
+/// tocar no clipboard do user. `GET_ENV_CLIP_CMD` vazio escolhe o nativo.
+#[cfg(target_os = "macos")]
+mod native_clipboard {
+    use super::run_tty;
+    use objc2::rc::Retained;
+    use objc2_app_kit::{NSPasteboard, NSPasteboardTypeString};
+    use objc2_foundation::NSString;
+    use std::time::{Duration, Instant};
+
+    struct Board(String);
+
+    impl Board {
+        fn new(test: &str) -> Self {
+            Board(format!("get-env-cli-{}-{test}", std::process::id()))
+        }
+
+        fn pb(&self) -> Retained<NSPasteboard> {
+            NSPasteboard::pasteboardWithName(&NSString::from_str(&self.0))
+        }
+
+        fn text(&self) -> Option<String> {
+            let string_type = unsafe { NSPasteboardTypeString };
+            self.pb().stringForType(string_type).map(|s| s.to_string())
+        }
+
+        /// O user aperta ⌘C em outra coisa.
+        fn user_copies(&self, text: &str) {
+            let pb = self.pb();
+            pb.clearContents();
+            let string_type = unsafe { NSPasteboardTypeString };
+            assert!(pb.setString_forType(&NSString::from_str(text), string_type));
+        }
+
+        /// Copia FAKE_TOKEN pelo binário, com stdout num TTY.
+        fn copy_fake(&self, args: &[&str], clear_secs: &str) {
+            let mut all = vec!["fake_tok"];
+            all.extend_from_slice(args);
+            let (out, rc) = run_tty(
+                &all,
+                &[
+                    ("FAKE_TOKEN", "abcdefgh"),
+                    ("GET_ENV_PASTEBOARD", &self.0),
+                    ("GET_ENV_CLIP_CLEAR", clear_secs),
+                ],
+                "",
+            );
+            assert_eq!(rc, 0, "{out:?}");
+            assert_eq!(self.text().as_deref(), Some("abcdefgh"));
+        }
+
+        /// Espera até `secs` segundos o pasteboard ficar vazio.
+        fn wait_cleared(&self, secs: u64) -> bool {
+            let deadline = Instant::now() + Duration::from_secs(secs);
+            while Instant::now() < deadline {
+                if self.text().is_none() {
+                    return true;
+                }
+                std::thread::sleep(Duration::from_millis(100));
+            }
+            false
+        }
+    }
+
+    impl Drop for Board {
+        fn drop(&mut self) {
+            let pb = self.pb();
+            unsafe { objc2::msg_send![&*pb, releaseGlobally] }
+        }
+    }
+
+    #[test]
+    fn copied_value_is_cleared_after_deadline() {
+        let b = Board::new("deadline");
+        b.copy_fake(&[], "1");
+        assert!(b.wait_cleared(10), "{:?}", b.text());
+    }
+
+    #[test]
+    fn user_copy_before_deadline_is_kept() {
+        let b = Board::new("user-copy");
+        b.copy_fake(&[], "1");
+        b.user_copies("do user");
+        assert!(!b.wait_cleared(3));
+        assert_eq!(b.text().as_deref(), Some("do user"));
+    }
+
+    #[test]
+    fn no_clear_flag_keeps_value() {
+        let b = Board::new("no-clear");
+        b.copy_fake(&["--no-clear"], "1");
+        assert!(!b.wait_cleared(3));
+    }
+
+    #[test]
+    fn zero_seconds_keeps_value() {
+        let b = Board::new("zero");
+        b.copy_fake(&[], "0");
+        assert!(!b.wait_cleared(3));
+    }
 }

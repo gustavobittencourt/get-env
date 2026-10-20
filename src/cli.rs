@@ -8,16 +8,19 @@ use crate::i18n::lang;
 pub struct Args {
     pub query: Option<String>,
     pub file: Option<PathBuf>,
+    pub no_clear: bool,
 }
 
 /// Lê os argumentos (sem o argv[0]); erro devolve a linha de uso.
 pub fn parse(args: impl IntoIterator<Item = String>) -> Result<Args, String> {
     let mut query = None;
     let mut file = None;
+    let mut no_clear = false;
     let mut args = args.into_iter();
     while let Some(arg) = args.next() {
         match arg.as_str() {
             "-f" | "--file" => file = Some(args.next().ok_or_else(usage)?.into()),
+            "--no-clear" => no_clear = true,
             flag if flag.starts_with('-') => return Err(usage()),
             _ if query.is_some() => return Err(usage()),
             _ => query = Some(arg),
@@ -26,6 +29,7 @@ pub fn parse(args: impl IntoIterator<Item = String>) -> Result<Args, String> {
     Ok(Args {
         query: query.filter(|q| !q.is_empty()),
         file,
+        no_clear,
     })
 }
 
@@ -52,7 +56,8 @@ mod tests {
             p(&["fake"]),
             Ok(Args {
                 query: Some("fake".into()),
-                file: None
+                file: None,
+                no_clear: false,
             })
         );
     }
@@ -62,6 +67,7 @@ mod tests {
         let expected = Ok(Args {
             query: Some("x".into()),
             file: Some("a.env".into()),
+            no_clear: false,
         });
         assert_eq!(p(&["-f", "a.env", "x"]), expected);
         assert_eq!(p(&["x", "--file", "a.env"]), expected);
@@ -72,9 +78,22 @@ mod tests {
         let expected = Ok(Args {
             query: None,
             file: None,
+            no_clear: false,
         });
         assert_eq!(p(&[]), expected);
         assert_eq!(p(&[""]), expected);
+    }
+
+    #[test]
+    fn no_clear_flag() {
+        assert_eq!(
+            p(&["--no-clear", "x"]),
+            Ok(Args {
+                query: Some("x".into()),
+                file: None,
+                no_clear: true,
+            })
+        );
     }
 
     #[test]

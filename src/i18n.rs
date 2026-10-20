@@ -148,6 +148,7 @@ static HELP_PT: HelpDoc = HelpDoc {
                     "lê as variáveis do arquivo .env, não do ambiente",
                 ),
                 ("", "executa o arquivo no zsh: use só .env confiável"),
+                ("--no-clear", "não limpa o clipboard depois da cópia"),
                 ("-h, --help", "mostra esta ajuda"),
             ],
         },
@@ -156,6 +157,10 @@ static HELP_PT: HelpDoc = HelpDoc {
             kind: RowKind::Plain,
             rows: &[
                 ("1 resultado", "mostra o cartão e copia o valor"),
+                (
+                    "clipboard",
+                    "limpo em 60 s se ainda for a cópia; sem histórico",
+                ),
                 (
                     "vários ou sem nome",
                     "abre a tabela interativa, filtrada pelo nome",
@@ -201,8 +206,12 @@ static HELP_PT: HelpDoc = HelpDoc {
                     "dark, light ou ansi; senão o tema do macOS",
                 ),
                 (
+                    "GET_ENV_CLIP_CLEAR",
+                    "segundos até limpar (padrão: 60); 0 desliga",
+                ),
+                (
                     "GET_ENV_CLIP_CMD",
-                    "recebe a cópia no stdin (padrão: pbcopy)",
+                    "recebe a cópia no stdin; sem limpeza automática",
                 ),
                 ("NO_COLOR", "desliga as cores"),
             ],
@@ -231,6 +240,7 @@ static HELP_EN: HelpDoc = HelpDoc {
                     "reads the .env file instead of the environment",
                 ),
                 ("", "runs the file in zsh: use trusted .env files only"),
+                ("--no-clear", "does not clear the clipboard after copying"),
                 ("-h, --help", "shows this help"),
             ],
         },
@@ -239,6 +249,7 @@ static HELP_EN: HelpDoc = HelpDoc {
             kind: RowKind::Plain,
             rows: &[
                 ("1 match", "shows the card and copies the value"),
+                ("clipboard", "cleared in 60 s if still the copy; no history"),
                 (
                     "many or no name",
                     "opens the interactive table, filtered by name",
@@ -284,8 +295,12 @@ static HELP_EN: HelpDoc = HelpDoc {
                 ),
                 ("GET_ENV_THEME", "dark, light or ansi; else the macOS theme"),
                 (
+                    "GET_ENV_CLIP_CLEAR",
+                    "seconds until clearing (default: 60); 0 = off",
+                ),
+                (
                     "GET_ENV_CLIP_CMD",
-                    "receives the copy on stdin (default: pbcopy)",
+                    "receives the copy on stdin; no automatic clearing",
                 ),
                 ("NO_COLOR", "turns colors off"),
             ],
@@ -334,8 +349,8 @@ impl Lang {
 
     pub fn usage(self) -> &'static str {
         self.pick(
-            "uso: get-env [nome] [--file|-f <arquivo.env>] [-h|--help]",
-            "usage: get-env [name] [--file|-f <file.env>] [-h|--help]",
+            "uso: get-env [nome] [--file|-f <arquivo.env>] [--no-clear] [-h|--help]",
+            "usage: get-env [name] [--file|-f <file.env>] [--no-clear] [-h|--help]",
         )
     }
 
@@ -350,6 +365,13 @@ impl Lang {
         self.pick(
             format!("comando de clipboard saiu com {code}"),
             format!("clipboard command exited with {code}"),
+        )
+    }
+
+    pub fn clip_native_failed(self) -> &'static str {
+        self.pick(
+            "o pasteboard do macOS recusou a cópia",
+            "the macOS pasteboard refused the copy",
         )
     }
 
@@ -609,6 +631,22 @@ mod tests {
             let rows = section.unwrap().rows;
             let file = rows.iter().position(|(l, _)| l.starts_with("-f")).unwrap();
             assert_eq!(rows[file + 1], ("", warning), "{lang:?}");
+        }
+    }
+
+    #[test]
+    fn help_documents_clipboard_clearing() {
+        for lang in [Pt, En] {
+            let rows: Vec<&str> = lang
+                .help()
+                .sections
+                .iter()
+                .flat_map(|s| s.rows.iter().map(|(l, _)| *l))
+                .collect();
+            for left in ["--no-clear", "clipboard", "GET_ENV_CLIP_CLEAR"] {
+                assert!(rows.contains(&left), "{lang:?} {left}");
+            }
+            assert!(lang.usage().contains("[--no-clear]"), "{lang:?}");
         }
     }
 

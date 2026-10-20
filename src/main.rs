@@ -23,6 +23,10 @@ fn main() -> ExitCode {
     let theme = OnceCell::new();
 
     let argv: Vec<String> = std::env::args().skip(1).collect();
+    if let Some(job) = clipboard::helper_job(&argv) {
+        clipboard::run_helper(&job);
+        return ExitCode::SUCCESS;
+    }
     if cli::wants_help(&argv) {
         let palette = std::io::stdout().is_terminal().then(|| palette(&theme));
         // Pipe fechado (`get-env -h | head -1`) não é erro.
@@ -64,13 +68,17 @@ fn main() -> ExitCode {
         None => all.clone(),
     };
 
+    let clear = clipboard::clear_after(
+        args.no_clear,
+        std::env::var("GET_ENV_CLIP_CLEAR").ok().as_deref(),
+    );
     let tty = std::io::stdout().is_terminal();
     if args.query.is_some() && found.len() == 1 {
         if !tty {
             return print_masked(&found).unwrap_or(ExitCode::SUCCESS);
         }
         let var = &found[0];
-        let copied = clipboard::copy(&var.value);
+        let copied = clipboard::copy(&var.value, clear);
         let footer = match &copied {
             Ok(()) => Footer::Copied,
             Err(e) => Footer::Failed(e.clone()),
@@ -93,7 +101,7 @@ fn main() -> ExitCode {
     if tty {
         // A tabela recebe tudo; a query vira o filtro inicial da busca.
         let filter = args.query.as_deref().unwrap_or("");
-        if let Err(e) = tui::run(all, filter, palette(&theme)) {
+        if let Err(e) = tui::run(all, filter, palette(&theme), clear) {
             return report(&theme, &lang().table_error(&e), "");
         }
     } else if let Some(code) = print_masked(&found) {
