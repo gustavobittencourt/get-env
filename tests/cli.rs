@@ -355,6 +355,19 @@ fn closed_pipe_exits_cleanly() {
     assert_eq!(out.status.code(), Some(0));
 }
 
+/// Valor com formato de credencial sai mascarado no pipe mesmo com nome
+/// inocente; montado em runtime para o fonte não parecer segredo.
+#[test]
+fn pipe_masks_secret_shaped_value() {
+    let url = format!("postgres://app:{}@db.local/app", "hunter2");
+    let aws = format!("AK{}{}", "IA", "X".repeat(16));
+    let (out, _, rc) = run(&[], &[("DB", url.as_str()), ("CLOUD_ID", aws.as_str())]);
+    assert!(out.contains("DB=postg…\n"), "{out:?}");
+    assert!(out.contains("CLOUD_ID=AKIAX…\n"), "{out:?}");
+    assert!(!out.contains("hunter2"), "{out:?}");
+    assert_eq!(rc, 0);
+}
+
 /// Cópia pelo pasteboard nativo, num pasteboard com nome próprio para não
 /// tocar no clipboard do user. `GET_ENV_CLIP_CMD` vazio escolhe o nativo.
 #[cfg(target_os = "macos")]

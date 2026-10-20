@@ -4,6 +4,7 @@ mod format;
 mod i18n;
 mod matching;
 mod output;
+mod secrets;
 mod theme;
 mod tui;
 mod vars;

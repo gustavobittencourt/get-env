@@ -299,7 +299,7 @@ fn name_line(var: &Var, filter: &str, geometry: &Geometry, palette: &Palette) ->
 fn value_line(var: &Var, geometry: &Geometry, palette: &Palette) -> Line<'static> {
     let shown = display_value(&var.name, &var.value);
     let width = usize::from(geometry.value_width);
-    if !is_sensitive(&var.name) {
+    if !is_sensitive(&var.name, &var.value) {
         return Line::from(Span::styled(fit(&shown, width), palette.value));
     }
     if width <= self::width(LOCK) {

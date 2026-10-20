@@ -27,7 +27,7 @@ pub fn card(
 ) -> String {
     let shown = display_value(name, value);
     let masked_note = format!("  {}", lang().masked());
-    let sensitive = is_sensitive(name);
+    let sensitive = is_sensitive(name, value);
     let name_shown = escape(name);
     let body_width = width(&shown) + if sensitive { width(&masked_note) } else { 0 };
     let (foot, foot_style) = match footer {

@@ -2,18 +2,36 @@
 
 use unicode_width::UnicodeWidthChar;
 
-const SENSITIVE_PARTS: [&str; 4] = ["TOKEN", "KEY", "SECRET", "PASS"];
+use crate::secrets::looks_secret;
+
+/// Trechos que tornam o nome sensível em qualquer posição.
+const SENSITIVE_PARTS: [&str; 8] = [
+    "TOKEN",
+    "KEY",
+    "SECRET",
+    "PASS",
+    "CREDENTIAL",
+    "DATABASE_URL",
+    "JWT",
+    "DSN",
+];
+/// Palavras (entre `_`) que tornam o nome sensível; `AUTH` como trecho
+/// pegaria `GIT_AUTHOR_NAME`.
+const SENSITIVE_WORDS: [&str; 1] = ["AUTH"];
 const VISIBLE_CHARS: usize = 5;
 
-pub fn is_sensitive(name: &str) -> bool {
+/// Sensível pelo nome ou por um valor com formato de credencial.
+pub fn is_sensitive(name: &str, value: &str) -> bool {
     let upper = name.to_uppercase();
     SENSITIVE_PARTS.iter().any(|part| upper.contains(part))
+        || upper.split('_').any(|word| SENSITIVE_WORDS.contains(&word))
+        || looks_secret(value)
 }
 
-/// Valor como aparece no terminal: mascarado se o nome é sensível e com
+/// Valor como aparece no terminal: mascarado se é sensível e com
 /// todo caractere de controle escapado (`\n`, `\r`, `\t`, `\x1b`…).
 pub fn display_value(name: &str, value: &str) -> String {
-    let shown = if !is_sensitive(name) {
+    let shown = if !is_sensitive(name, value) {
         value.to_string()
     } else if value.chars().count() <= VISIBLE_CHARS {
         "•••".to_string()
@@ -110,11 +128,38 @@ mod tests {
     #[test]
     fn sensitive_names_ignore_case() {
         for n in ["OPENAI_API_KEY", "gh_token", "Db_Password", "MY_SECRET"] {
-            assert!(is_sensitive(n), "{n}");
+            assert!(is_sensitive(n, "x"), "{n}");
         }
         for n in ["PATH", "HOME", "PWD"] {
-            assert!(!is_sensitive(n), "{n}");
+            assert!(!is_sensitive(n, "x"), "{n}");
         }
+    }
+
+    /// Nomes que escapavam da lista antiga (revisão de segurança).
+    #[test]
+    fn sensitive_names_beyond_token_key() {
+        for n in [
+            "DATABASE_URL",
+            "AUTH_HEADER",
+            "BASIC_AUTH",
+            "GOOGLE_APPLICATION_CREDENTIALS",
+            "JWT",
+            "SENTRY_DSN",
+        ] {
+            assert!(is_sensitive(n, "x"), "{n}");
+        }
+        for n in ["GIT_AUTHOR_NAME", "AUTHOR", "LANG"] {
+            assert!(!is_sensitive(n, "x"), "{n}");
+        }
+    }
+
+    /// Nome inocente com valor de credencial: mascara pelo valor.
+    #[test]
+    fn masks_by_value_when_name_is_innocent() {
+        let url = format!("postgres://app:{}@db.local/app", "hunter2");
+        assert!(is_sensitive("DB", &url));
+        assert_eq!(display_value("DB", &url), "postg…");
+        assert_eq!(masked_line("DB", &url), "DB=postg…");
     }
 
     #[test]
